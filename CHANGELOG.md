@@ -2,6 +2,17 @@
 
 Newest first. Nothing is built until the instruction "build it and push it". Each entry has a short commit message (50 characters or fewer) and a long commit message (250 characters or fewer).
 
+## CL-0004 | 2026-10-07 20:27 | v0.2 (built)
+
+- Bug from the first GitHub Actions run (v0.1): `pytest -q` stopped at collection with `ModuleNotFoundError: No module named 'app'` in all three test files. Nothing was published to Docker Hub and no v0.1 git tag was created, because the run stopped at the test step.
+- Cause: the repository root is not on Python's import path when `pytest` is run directly. The tests folder has no `__init__.py`, so pytest only adds `tests/` to the path.
+- Fix: added `pytest.ini` with `pythonpath = .` and `testpaths = tests`.
+- VERSION bumped to 0.2.
+- Checked in this environment: scheduler and photo-parsing tests still pass. The web app tests and the Docker build still cannot run here (no PyPI access, no Docker daemon), so the GitHub Actions run is the check.
+- Risk: `tests/test_app.py` has never run before this CI run, and CI installs newer FastAPI and Starlette than were available locally (FastAPI 0.142, Starlette 1.7). Once imports work, more failures may surface. They will be fixed in the same build.
+- Short commit (42/50): `Fix CI: add pytest.ini so tests import app`
+- Long commit (205/250): `Make pytest find the app package by adding pytest.ini with pythonpath and testpaths, fixing the GitHub Actions collection error. Bump VERSION to 0.2 so the failed v0.1 run is superseded by a clean release.`
+
 ## CL-0003 | 2026-10-07 19:43 | v0.1 (built)
 
 - Docker image (Python 3.12 slim plus Tesseract) serving the FastAPI web portal on port 8000. Data in a /data volume, /health endpoint, optional APP_PASSWORD login.
