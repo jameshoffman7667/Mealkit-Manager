@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS plan(
   reason TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (week_start, account_id)
 );
+CREATE TABLE IF NOT EXISTS remote_weeks(
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  week_start TEXT NOT NULL,
+  state TEXT NOT NULL,
+  checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (account_id, week_start)
+);
 CREATE TABLE IF NOT EXISTS actions_done(
   key TEXT PRIMARY KEY,
   done_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -113,9 +120,28 @@ def session():
         conn.close()
 
 
+# Columns added after v0.2. Added in place so an existing database keeps its data.
+ACCOUNT_COLUMNS = [
+    ("link_state", "TEXT NOT NULL DEFAULT 'unlinked'"),  # unlinked | linked | attention
+    ("cred_enc", "TEXT NOT NULL DEFAULT ''"),            # encrypted login, never shown
+    ("dry_run", "INTEGER NOT NULL DEFAULT 1"),           # 1: connector reads only, changes nothing
+    ("link_msg", "TEXT NOT NULL DEFAULT ''"),
+    ("last_sync", "TEXT NOT NULL DEFAULT ''"),
+    ("remote_status", "TEXT NOT NULL DEFAULT ''"),
+]
+
+
+def migrate(c) -> None:
+    have = {r["name"] for r in c.execute("PRAGMA table_info(accounts)")}
+    for name, ddl in ACCOUNT_COLUMNS:
+        if name not in have:
+            c.execute(f"ALTER TABLE accounts ADD COLUMN {name} {ddl}")
+
+
 def init() -> None:
     with session() as c:
         c.executescript(SCHEMA)
+        migrate(c)
         for sid, name in SEED_SERVICES:
             c.execute("INSERT OR IGNORE INTO services(id, name) VALUES (?, ?)", (sid, name))
 

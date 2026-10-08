@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import secrets
 from contextlib import asynccontextmanager
@@ -8,18 +9,34 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from urllib.parse import quote
 from fastapi.templating import Jinja2Templates
 
-from . import config, db, ocr
+from . import automation, config, db, ocr, vault
 from . import scheduler as sch
+from .state import expire_codes, load_state, sync_past  # noqa: F401
 
 BASE = Path(__file__).resolve().parent
+
+
+async def _sync_loop():
+    """Background cycle: read every linked account and carry out due actions for Auto accounts."""
+    await asyncio.sleep(60)
+    while True:
+        try:
+            await asyncio.to_thread(automation.run_cycle)
+        except Exception:
+            pass
+        await asyncio.sleep(max(0.05, config.sync_hours()) * 3600)
 
 
 @asynccontextmanager
 async def lifespan(_app):
     db.init()
+    task = asyncio.create_task(_sync_loop()) if config.sync_hours() > 0 else None
     yield
+    if task:
+        task.cancel()
 
 
 app = FastAPI(title="Meal Kit Subscription Manager", lifespan=lifespan)
@@ -68,78 +85,13 @@ def back(url: str) -> RedirectResponse:
     return RedirectResponse(url, status_code=303)
 
 
-def sync_past(c, today: date) -> None:
-    """Count weeks that have passed as delivered, then drop stale rows."""
-    wk0 = sch.monday(today).isoformat()
-    for r in c.execute(
-        "SELECT account_id, window_id, week_start FROM plan "
-        "WHERE state='delivering' AND window_id IS NOT NULL AND week_start < ?",
-        (wk0,),
-    ).fetchall():
-        c.execute(
-            "INSERT OR IGNORE INTO deliveries(account_id, window_id, week_start) VALUES (?,?,?)",
-            (r["account_id"], r["window_id"], r["week_start"]),
-        )
-    c.execute("DELETE FROM plan WHERE week_start < ?", (wk0,))
-    c.execute("DELETE FROM overrides WHERE week_start < ?", (wk0,))
-
-
-def expire_codes(c, today: date) -> None:
-    c.execute(
-        "UPDATE promo_codes SET status='expired' "
-        "WHERE expiry IS NOT NULL AND expiry < ? AND status IN ('available','reserved')",
-        (today.isoformat(),),
-    )
-
-
-def load_state(c) -> dict:
-    today = config.today()
-    sync_past(c, today)
-    expire_codes(c, today)
-    svc_rows = c.execute("SELECT * FROM services ORDER BY name").fetchall()
-    services = {
-        r["id"]: sch.Svc(r["id"], r["name"], r["skip_cutoff_days"], r["reactivate_lead_days"],
-                         bool(r["skips_consume_window"]))
-        for r in svc_rows
-    }
-    acct_rows = c.execute("SELECT * FROM accounts ORDER BY service_id, nickname").fetchall()
-    accounts = [sch.Acct(r["id"], r["service_id"], r["nickname"], r["status"]) for r in acct_rows]
-    used = {r["window_id"]: r["n"] for r in c.execute(
-        "SELECT window_id, COUNT(*) n FROM deliveries GROUP BY window_id")}
-    win_rows = c.execute("SELECT * FROM windows ORDER BY start_date, id").fetchall()
-    windows = [
-        sch.Win(r["id"], r["account_id"], date.fromisoformat(r["start_date"]), r["weeks"],
-                used.get(r["id"], 0), r["discount_value"], r["label"])
-        for r in win_rows
-    ]
-    ovr_rows = c.execute("SELECT * FROM overrides ORDER BY week_start, id").fetchall()
-    overrides = [
-        sch.Ovr(date.fromisoformat(r["week_start"]), r["kind"], r["account_id"], bool(r["committed"]))
-        for r in ovr_rows
-    ]
-    horizon = int(db.get_setting(c, "horizon_weeks", str(config.horizon_default())))
-    plan = sch.build_plan(today, accounts, services, windows, overrides, horizon)
-
-    c.execute("DELETE FROM plan WHERE week_start >= ?", (sch.monday(today).isoformat(),))
-    for w in plan.weeks:
-        for aid, cell in w.cells.items():
-            c.execute(
-                "INSERT OR REPLACE INTO plan(week_start, account_id, state, window_id, reason) "
-                "VALUES (?,?,?,?,?)",
-                (w.start.isoformat(), aid, cell.state, cell.window_id, cell.reason),
-            )
-    done = {r["key"] for r in c.execute("SELECT key FROM actions_done")}
-    actions = [a for a in plan.actions if a.key not in done]
-    return {
-        "today": today, "services": services, "svc_rows": svc_rows, "accounts": accounts,
-        "acct_rows": acct_rows, "windows": windows, "win_rows": win_rows, "overrides": overrides,
-        "ovr_rows": ovr_rows, "plan": plan, "actions": actions, "horizon": horizon, "used": used,
-        "acct_by_id": {a.id: a for a in accounts},
-    }
-
-
 def render(request: Request, name: str, **ctx):
+    ctx.setdefault("flash", request.query_params.get("msg", ""))
     return templates.TemplateResponse(request, name, ctx)
+
+
+def flash(url: str, msg: str) -> RedirectResponse:
+    return back(f"{url}?msg={quote(msg[:300])}")
 
 
 # ---------- dashboard ----------
@@ -188,7 +140,7 @@ def accounts_page(request: Request):
     for r in st["win_rows"]:
         wins_by_acct.setdefault(r["account_id"], []).append(r)
     return render(request, "accounts.html", st=st, wins_by_acct=wins_by_acct,
-                  ends=st["plan"].window_ends)
+                  ends=st["plan"].window_ends, vault_ok=vault.configured())
 
 
 @app.post("/accounts")
@@ -210,11 +162,71 @@ def create_account(service_id: str = Form(...), nickname: str = Form(...), email
 
 
 @app.post("/accounts/{aid}/update")
-def update_account(aid: int, status: str = Form(...), automation: str = Form(...)):
+def update_account(aid: int, status: str = Form(...), automation: str = Form(...),
+                   live_actions: Optional[str] = Form(None)):
+    if status not in ("active", "cancelled", "paused") or automation not in ("auto", "ask", "remind"):
+        raise HTTPException(400, "Unknown status or mode")
     with db.session() as c:
-        c.execute("UPDATE accounts SET status=?, automation=? WHERE id=?", (status, automation, aid))
-        db.log(c, aid, "account_updated", f"status={status}, automation={automation}")
+        row = c.execute("SELECT * FROM accounts WHERE id=?", (aid,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Account not found")
+        dry = 1
+        if live_actions:
+            if row["link_state"] != "linked" or not row["last_sync"]:
+                return flash("/accounts", "Turn off dry-run only after a successful sign-in test (Sync now).")
+            dry = 0
+        c.execute("UPDATE accounts SET status=?, automation=?, dry_run=? WHERE id=?",
+                  (status, automation, dry, aid))
+        db.log(c, aid, "account_updated",
+               f"status={status}, mode={automation}, {'live' if not dry else 'dry-run'}")
     return back("/accounts")
+
+
+@app.post("/accounts/{aid}/link")
+def link_account(aid: int, email: str = Form(...), password: str = Form(...)):
+    if not vault.configured():
+        return flash("/accounts", f"Set SECRET_KEY (at least {vault.MIN_KEY_LEN} characters) on the "
+                                  "container before linking an account.")
+    email = email.strip()
+    if not email or not password:
+        raise HTTPException(400, "Email and password are required")
+    with db.session() as c:
+        if not c.execute("SELECT 1 FROM accounts WHERE id=?", (aid,)).fetchone():
+            raise HTTPException(404, "Account not found")
+        c.execute("UPDATE accounts SET email=?, cred_enc=?, link_state='linked', dry_run=1, link_msg='', "
+                  "last_sync='' WHERE id=?", (email, vault.encrypt(email, password), aid))
+        db.log(c, aid, "account_linked", "login stored encrypted; dry-run on")
+    res = automation.sync_account(aid)
+    if res["ok"]:
+        return flash("/accounts", f"Signed in. {res['msg']}. The account is in dry-run: nothing will be changed.")
+    return flash("/accounts", f"Saved, but the sign-in test failed: {res['msg']}")
+
+
+@app.post("/accounts/{aid}/unlink")
+def unlink_account(aid: int):
+    with db.session() as c:
+        c.execute("UPDATE accounts SET cred_enc='', link_state='unlinked', dry_run=1, link_msg='', "
+                  "last_sync='', remote_status='' WHERE id=?", (aid,))
+        c.execute("DELETE FROM remote_weeks WHERE account_id=?", (aid,))
+        db.log(c, aid, "account_unlinked", "stored login deleted")
+    return back("/accounts")
+
+
+@app.post("/accounts/{aid}/sync")
+def sync_one(aid: int):
+    res = automation.sync_account(aid)
+    with db.session() as c:
+        automation.reconcile(c)
+    return flash("/accounts", ("Synced. " if res["ok"] else "Sync failed: ") + res["msg"])
+
+
+@app.post("/sync")
+def sync_all():
+    res = automation.run_cycle()
+    if res["skipped"]:
+        return flash("/settings", res["skipped"])
+    return flash("/settings", f"Done: {res['synced']} synced, {res['failed']} failed, "
+                              f"{res['performed']} actions performed, {res['dry_run']} dry-run.")
 
 
 @app.post("/accounts/{aid}/delete")
@@ -417,24 +429,26 @@ def actions_page(request: Request):
 @app.post("/actions/done")
 def action_done(type: str = Form(...), account_id: int = Form(...), week: str = Form(...)):
     wk = parse_date(week, "Week")
-    key = f"{type}:{account_id}:{wk.isoformat()}"
     with db.session() as c:
-        if type == "reactivate":
-            c.execute("UPDATE accounts SET status='active' WHERE id=?", (account_id,))
-        elif type == "cancel":
-            planned = c.execute(
-                "SELECT 1 FROM plan WHERE week_start=? AND account_id=? AND state='delivering'",
-                (wk.isoformat(), account_id),
-            ).fetchone()
-            c.execute("UPDATE accounts SET status='cancelled' WHERE id=?", (account_id,))
-            if planned:  # the box for this week is already locked in, keep it in the plan
-                c.execute("INSERT INTO overrides(week_start, kind, account_id, committed) "
-                          "VALUES (?, 'force', ?, 1)", (wk.isoformat(), account_id))
-        elif type != "skip":
+        try:
+            automation.complete_action(c, type, account_id, wk)
+        except ValueError:
             raise HTTPException(400, "Unknown action")
-        c.execute("INSERT OR IGNORE INTO actions_done(key) VALUES (?)", (key,))
-        db.log(c, account_id, f"{type}_done", f"week of {wk}")
     return back("/actions")
+
+
+@app.post("/actions/approve")
+def action_approve(type: str = Form(...), account_id: int = Form(...), week: str = Form(...)):
+    """Ask-first mode: the user approves, the app performs it on the service and verifies it."""
+    wk = parse_date(week, "Week")
+    with db.session() as c:
+        row = c.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
+    if not row or row["link_state"] != "linked":
+        raise HTTPException(400, "The account is not linked")
+    if row["dry_run"]:
+        return flash("/actions", "This account is in dry-run. Switch it to live on the Accounts page first.")
+    ok, msg = automation.execute_action(type, account_id, wk)
+    return flash("/actions", ("Done. " if ok else "Not done: ") + msg)
 
 
 # ---------- settings ----------
@@ -445,7 +459,19 @@ def settings_page(request: Request):
         log_rows = c.execute(
             "SELECT e.ts, e.event, e.detail, a.nickname FROM event_log e "
             "LEFT JOIN accounts a ON a.id = e.account_id ORDER BY e.id DESC LIMIT 25").fetchall()
-    return render(request, "settings.html", st=st, log=log_rows)
+        paused = db.get_setting(c, "automation_paused", "0") == "1"
+        last_cycle = db.get_setting(c, "last_cycle", "never")
+    return render(request, "settings.html", st=st, log=log_rows, paused=paused, last_cycle=last_cycle,
+                  vault_ok=vault.configured(), auto_on=config.automation_enabled(),
+                  sync_hours=config.sync_hours())
+
+
+@app.post("/settings/automation")
+def automation_pause(paused: Optional[str] = Form(None)):
+    with db.session() as c:
+        db.set_setting(c, "automation_paused", "1" if paused else "0")
+        db.log(c, None, "automation_paused" if paused else "automation_resumed", "")
+    return back("/settings")
 
 
 @app.post("/settings")

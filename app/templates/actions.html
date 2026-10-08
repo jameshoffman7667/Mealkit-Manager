@@ -2,14 +2,14 @@
 {% block title %}Actions{% endblock %}
 {% block content %}
 <h1>Action queue</h1>
-<p>Do each action on the service's website or app, then press Done so the plan stays accurate.
-Skips further than 3 weeks out are hidden until they get closer.</p>
+<p>Accounts in <b>Auto</b> mode are handled by the app once they are linked and live. For the others, do the action on the
+service's website or app, then press Done so the plan stays accurate. Skips further than 3 weeks out are hidden until they get closer.</p>
 
 {% set shown = actions|selectattr("type", "ne", "skip")|list + actions|selectattr("type", "eq", "skip")|selectattr("due", "le", horizon_limit)|list %}
 {% if shown %}
 <div class="scroll">
 <table>
-  <thead><tr><th>Do by</th><th>Action</th><th>Account</th><th>Week of</th><th>Notes</th><th></th></tr></thead>
+  <thead><tr><th>Do by</th><th>Action</th><th>Account</th><th>Week of</th><th>Notes</th><th>Handling</th><th></th></tr></thead>
   <tbody>
   {% for a in shown|sort(attribute="due") %}
     <tr class="{{ 'urgent' if a.due <= st.today else '' }}">
@@ -18,7 +18,20 @@ Skips further than 3 weeks out are hidden until they get closer.</p>
       <td>{{ st.acct_by_id[a.account_id].nickname }} <small>{{ st.services[st.acct_by_id[a.account_id].service_id].name }}</small></td>
       <td>{{ a.week.strftime('%b %-d') }}</td>
       <td>{{ a.note }}</td>
+      {% set acct = st.acct_rows|selectattr("id", "eq", a.account_id)|first %}
+      <td>{% if acct["link_state"] == "linked" and acct["automation"] == "auto" %}{{ "Dry-run (not changed)" if acct["dry_run"] else "Automatic" }}
+          {% elif acct["link_state"] == "linked" and acct["automation"] == "ask" %}Waiting for your approval
+          {% elif acct["link_state"] == "attention" %}<span class="warn">Needs attention</span>
+          {% else %}By hand{% endif %}</td>
       <td>
+        {% if acct["link_state"] == "linked" and acct["automation"] == "ask" and not acct["dry_run"] %}
+        <form method="post" action="/actions/approve" class="inline">
+          <input type="hidden" name="type" value="{{ a.type }}">
+          <input type="hidden" name="account_id" value="{{ a.account_id }}">
+          <input type="hidden" name="week" value="{{ a.week.isoformat() }}">
+          <button>Approve</button>
+        </form>
+        {% endif %}
         <form method="post" action="/actions/done" class="inline">
           <input type="hidden" name="type" value="{{ a.type }}">
           <input type="hidden" name="account_id" value="{{ a.account_id }}">

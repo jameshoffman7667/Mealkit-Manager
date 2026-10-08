@@ -5,12 +5,17 @@ services:
     # To build locally instead of pulling, uncomment:
     # build: .
     ports:
-      - "8000:8000"
+      - "3800:3800"
     environment:
       TZ: America/Toronto
       # Set a password to protect the portal (HTTP Basic: any username, this password).
       APP_PASSWORD: ""
       HORIZON_WEEKS: "12"
+      # Needed to link accounts: at least 16 random characters. Keep it safe; changing it
+      # means logins must be entered again.
+      SECRET_KEY: ""
+      # Hours between background reads of linked accounts (0 turns the background run off).
+      SYNC_HOURS: "6"
     volumes:
       - mealkit-data:/data
     restart: unless-stopped

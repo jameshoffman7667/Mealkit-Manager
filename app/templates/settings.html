@@ -9,6 +9,18 @@
   <button>Save</button>
 </form>
 
+<h2>Linked accounts and automation</h2>
+<ul class="list">
+  <li>Login key (<code>SECRET_KEY</code>): {% if vault_ok %}set{% else %}<b class="warn">not set, accounts cannot be linked</b>{% endif %}</li>
+  <li>Automation switch (<code>AUTOMATION</code>): {{ "on" if auto_on else "off" }}. Background run every {{ sync_hours }} hours.</li>
+  <li>Last run: {{ last_cycle }}</li>
+</ul>
+<form method="post" action="/settings/automation" class="row">
+  <label class="checkrow"><input type="checkbox" name="paused" value="1"{% if paused %} checked{% endif %}> Pause all automation (reading and changes)</label>
+  <button>Save</button>
+</form>
+<form method="post" action="/sync" class="inline"><button class="secondary button">Run a sync and any due actions now</button></form>
+
 <h2>Service rules</h2>
 <p class="hint">These differ per service and change over time. Check each service's current terms and adjust.</p>
 {% for s in st.svc_rows %}

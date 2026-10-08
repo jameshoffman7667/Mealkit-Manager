@@ -240,7 +240,7 @@ Each service connector implements the same interface: sign in, read status, read
 
 ### 10.1 Packaging
 
-- The app ships as one Docker image that serves the web portal and the scheduler from a single container.
+- The app ships as one Docker image that serves the web portal and the scheduler from a single container, listening on port 3800 (from v0.3; v0.1 and v0.2 used port 8000).
 - Configuration through environment variables; data kept on a mounted volume; a health endpoint for monitoring.
 - The portal is responsive and works on mobile browsers.
 
@@ -288,3 +288,34 @@ Each service connector implements the same interface: sign in, read status, read
 | Notifications | Not built | The in-app action queue only. |
 | Packaging and release | Built | Section 10.1 to 10.4: Docker image, GitHub Actions to Docker Hub, VERSION file. |
 | Security | Minimal | Optional shared password. No 2FA. No credentials are stored because accounts are not linked. |
+
+### 11.2 v0.3 (built 2026-10-07): linked accounts and automatic actions
+
+Requirements LK-1 to LK-8 below, with how each was built. Differences from the wording are in the status table that follows.
+
+| ID | Requirement |
+| --- | --- |
+| LK-1 | The user can link an account by entering its login (email and password). Logins are encrypted at rest with a key the operator supplies in an environment variable. The app refuses to store a login if no key is set. Passwords are never shown again or logged. Unlinking deletes the stored login. |
+| LK-2 | One connector per service (HelloFresh, Chef's Plate, Good Food) signs in to the service's website with the user's own login and can: read status, read upcoming weeks (delivering, skipped, paused) and discounts, skip and unskip a week, reactivate, cancel, and verify the result. |
+| LK-3 | A verification step (one-time code, CAPTCHA, email challenge) is never bypassed. The account moves to Needs attention and the user completes the sign-in. |
+| LK-4 | Automatic status sync: at least daily, and before every skip and cancel cut-off, the app reads each linked account's status for the coming weeks and records it as the actual state for each week. Differences from the plan raise an alert and the plan is recalculated. |
+| LK-5 | Automatic actions: when an account's mode is Auto, the app performs reactivate, skip and cancel at the planned time. Ask first requires approval in the portal. Remind only stays manual as in v0.2. Every action is verified by re-reading the account, retried on failure, and escalated if it still fails. |
+| LK-6 | Safety checks before a cancel (AC-3): the account is re-read, the next week is skipped or has no box, and no unpaid or pending order exists. If any check fails, the cancel is not performed and the user is alerted. |
+| LK-7 | Every automated action is stored in the activity log with time, result and evidence (page text or confirmation number). |
+| LK-8 | Newly linked accounts start in dry-run mode: the connector reads and reports what it would do without changing anything. The user switches the account to Ask first or Auto after checking the results. |
+
+Connector design note (CL-0007): connectors are Python Playwright flows with one page profile per service (paths and selectors, overridable in `connectors.json` without a rebuild), no stealth or bot evasion. The open-source mcp-hellofresh project was a reference only. Every action is verified by re-reading the account.
+
+| Requirement | v0.3 status | Notes |
+| --- | --- | --- |
+| LK-1 | Built | Fernet encryption, key derived from `SECRET_KEY` (16+ characters). Linking is refused without the key. Unlink deletes the login. Changing the key means entering logins again. |
+| LK-2 | Built, unverified against the live sites | Read status, read weeks, skip, unskip, reactivate, cancel for all three services. Page paths and selectors are starting guesses (HelloFresh and Chef's Plate share one layout assumption; Good Food paths are guesses). Reading discounts from the site is not built. |
+| LK-3 | Built | Verification text (codes, CAPTCHA, check your email) stops the run and sets Needs attention. |
+| LK-4 | Built, differs | Runs every 6 hours (`SYNC_HOURS`), on demand, and before every action. The plan is rebuilt after each read; a box the service shows on a locked week is adopted as committed; other differences are shown on the week plan and as an alert, and a planned box the service shows as skipped is un-skipped in Auto mode. |
+| LK-5 | Built | Auto acts when due (skips 3 days before the cut-off; reactivate and cancel when due). Ask first waits for Approve on the Actions page. Every action is verified; after 3 failed attempts automatic tries stop. No retry delay beyond the next cycle. |
+| LK-6 | Built, differs | Refuses if a payment problem is visible, or if a box after the last discounted one cannot be skipped. A pending unpaid order is detected only from payment wording on the page. |
+| LK-7 | Built, differs | The log records time, result and a short status summary (counts of delivering/skipped weeks), not page text, to avoid storing personal data. `CONNECTOR_DEBUG=1` saves page text locally for fixing selectors. |
+| LK-8 | Built | New links start in dry-run. Live changes can be switched on only after a successful sign-in test. |
+| Port 3800 | Built | Dockerfile, health check, compose and README. |
+
+Constraints: the services offer no public APIs, so connectors drive their websites and will break when those sites change; automating accounts may breach a service's terms (section 9.1); the app cannot read or act on an account until the login works and any verification step is completed by the user.

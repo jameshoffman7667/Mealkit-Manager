@@ -38,3 +38,24 @@ def horizon_default() -> int:
 def today() -> date:
     tz = ZoneInfo(os.environ.get("TZ", "America/Toronto"))
     return datetime.now(tz).date()
+
+
+def secret_key() -> str:
+    """Operator-supplied key that protects stored service logins. Empty means linking is disabled."""
+    return os.environ.get("SECRET_KEY", "")
+
+
+def automation_enabled() -> bool:
+    return os.environ.get("AUTOMATION", "on").strip().lower() != "off"
+
+
+def sync_hours() -> float:
+    try:
+        return max(0.0, float(os.environ.get("SYNC_HOURS", "6")))
+    except ValueError:
+        return 6.0
+
+
+def debug_capture() -> bool:
+    """When on, connectors save the text of each page they read to DATA_DIR/debug (contains personal data)."""
+    return os.environ.get("CONNECTOR_DEBUG", "").strip().lower() in ("1", "true", "on", "yes")

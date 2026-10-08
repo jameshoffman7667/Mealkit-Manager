@@ -3,7 +3,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data \
-    TZ=America/Toronto
+    TZ=America/Toronto \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Tesseract provides the text recognition for photographed promo codes.
 RUN apt-get update \
@@ -14,15 +15,20 @@ WORKDIR /srv
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Chromium for the account connectors (adds roughly 400 MB to the image).
+RUN playwright install --with-deps chromium \
+    && chmod -R a+rX /ms-playwright \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY VERSION ./VERSION
 COPY app ./app
 
 RUN useradd --system --uid 10001 app && mkdir -p /data && chown app /data
 USER app
 VOLUME /data
-EXPOSE 8000
+EXPOSE 3800
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD curl -fsS http://localhost:8000/health || exit 1
+  CMD curl -fsS http://localhost:3800/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3800"]

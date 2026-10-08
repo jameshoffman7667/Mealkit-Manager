@@ -18,6 +18,7 @@
   </nav>
 </header>
 <main>
+{% if flash %}<p class="notice">{{ flash }}</p>{% endif %}
 {% block content %}{% endblock %}
 </main>
 <footer>Meal Kit Manager v{{ version() }}</footer>

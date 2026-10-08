@@ -118,3 +118,74 @@ def test_past_weeks_count_as_delivered(client, monkeypatch):
     plan = client.get("/api/plan").json()
     # two boxes (Oct 5, Oct 12) are now history, two remain from Oct 19
     assert [w["delivering"] for w in plan["weeks"]][:3] == [1, 1, None]
+
+
+# ---------- linked accounts (v0.3) ----------
+class _Site:
+    status = "active"
+    weeks = {date(2026, 10, 12): "delivering"}
+
+
+class _FakeConn:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        pass
+
+    def read_state(self, today):
+        from app.connectors.base import RemoteState
+        return RemoteState(_Site.status, dict(_Site.weeks), "", "fake read")
+
+
+def test_link_needs_secret_key(client, monkeypatch):
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    add_account(client, "HF main")
+    r = client.post("/accounts/1/link", data={"email": "a@b.c", "password": "pw"}, follow_redirects=False)
+    assert r.status_code == 303 and "SECRET_KEY" in r.headers["location"].replace("%20", " ")
+    assert "SECRET_KEY" in client.get("/accounts").text
+
+
+def test_link_sync_live_and_unlink(client, monkeypatch):
+    from app import connectors, db
+    monkeypatch.setenv("SECRET_KEY", "a-long-enough-secret-key")
+    monkeypatch.setattr(connectors, "FACTORY", lambda sid, e, p: _FakeConn())
+    add_account(client, "HF main")
+    r = client.post("/accounts/1/link", data={"email": "a@b.c", "password": "hunter2-pw"}, follow_redirects=True)
+    assert r.status_code == 200 and "Signed in" in r.text and "Dry-run" in r.text
+    assert "hunter2-pw" not in r.text
+    with db.session() as c:
+        row = c.execute("SELECT * FROM accounts WHERE id=1").fetchone()
+        assert row["link_state"] == "linked" and row["dry_run"] == 1 and "hunter2" not in row["cred_enc"]
+    # approving an action while in dry-run is refused
+    r = client.post("/actions/approve", data={"type": "skip", "account_id": "1", "week": "2026-10-12"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and "dry-run" in r.headers["location"]
+    # switch to live after the successful test
+    client.post("/accounts/1/update", data={"status": "active", "automation": "auto", "live_actions": "1"})
+    with db.session() as c:
+        assert c.execute("SELECT dry_run FROM accounts WHERE id=1").fetchone()["dry_run"] == 0
+    assert client.get("/").status_code == 200
+    # unlink removes the stored login and goes back to dry-run
+    client.post("/accounts/1/unlink")
+    with db.session() as c:
+        row = c.execute("SELECT * FROM accounts WHERE id=1").fetchone()
+        assert row["cred_enc"] == "" and row["link_state"] == "unlinked" and row["dry_run"] == 1
+
+
+def test_cannot_go_live_before_a_successful_sync(client):
+    add_account(client, "HF main")
+    r = client.post("/accounts/1/update", data={"status": "active", "automation": "auto", "live_actions": "1"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and "msg=" in r.headers["location"]
+    from app import db
+    with db.session() as c:
+        assert c.execute("SELECT dry_run FROM accounts WHERE id=1").fetchone()["dry_run"] == 1
+
+
+def test_port_is_3800_in_deploy_files():
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    assert "EXPOSE 3800" in (root / "Dockerfile").read_text()
+    assert "--port\", \"3800\"" in (root / "Dockerfile").read_text()
+    assert "3800:3800" in (root / "docker-compose.yml").read_text()

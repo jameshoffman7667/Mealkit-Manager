@@ -35,9 +35,41 @@
         {% for v, t in [("auto", "Auto"), ("ask", "Ask first"), ("remind", "Remind only")] %}<option value="{{ v }}"{% if r["automation"] == v %} selected{% endif %}>{{ t }}</option>{% endfor %}
       </select>
     </label>
+    {% if r["link_state"] == "linked" %}
+    <label class="checkrow"><input type="checkbox" name="live_actions" value="1"{% if not r["dry_run"] %} checked{% endif %}>
+      Make real changes on the service (untick for dry-run)</label>
+    {% endif %}
     <button>Save</button>
   </form>
-  <p class="hint">Version 0.1 plans and reminds only. You perform each action on the service's site, then mark it done in the action queue.</p>
+
+  <h3>Link to the service</h3>
+  {% if r["link_state"] == "unlinked" %}
+    <p class="hint">Not linked. Linking lets the app read this account's real status and weeks, and carry out skips, reactivations and cancellations for you.</p>
+  {% elif r["link_state"] == "linked" %}
+    <p>Linked{% if r["last_sync"] %}, last read {{ r["last_sync"].replace("T", " ") }}, the service shows the plan as <b>{{ r["remote_status"] or "unknown" }}</b>{% endif %}.
+      {% if r["dry_run"] %}<b class="warn">Dry-run:</b> the app reads and reports what it would do, and changes nothing.{% else %}<b>Live:</b> the app makes real changes in Auto mode, and after you approve in Ask first mode.{% endif %}</p>
+  {% else %}
+    <p class="notice error"><b>Needs attention:</b> {{ r["link_msg"] }}</p>
+  {% endif %}
+  {% if r["link_state"] != "unlinked" %}
+  <div class="row">
+    <form method="post" action="/accounts/{{ r['id'] }}/sync" class="inline"><button class="secondary button">Sync now</button></form>
+    <form method="post" action="/accounts/{{ r['id'] }}/unlink" class="inline" onsubmit="return confirm('Delete the stored login for this account?')"><button class="danger">Unlink and delete login</button></form>
+  </div>
+  {% endif %}
+  <details{% if r["link_state"] != "linked" %} open{% endif %}>
+    <summary>{{ "Update the stored login" if r["link_state"] != "unlinked" else "Link this account" }}</summary>
+    {% if not vault_ok %}
+    <p class="notice error">Set the <code>SECRET_KEY</code> environment variable (at least 16 characters) on the container to link accounts. Logins are encrypted with it.</p>
+    {% else %}
+    <form method="post" action="/accounts/{{ r['id'] }}/link" class="row" autocomplete="off">
+      <label>Email <input name="email" type="email" required value="{{ r['email'] }}"></label>
+      <label>Password <input name="password" type="password" required autocomplete="new-password"></label>
+      <button>Save and test sign-in</button>
+    </form>
+    <p class="hint">Stored encrypted, never shown again. If the site asks for a code or CAPTCHA, the app stops and asks you to sign in yourself.</p>
+    {% endif %}
+  </details>
 
   <h3>Discount windows</h3>
   {% set wl = wins_by_acct.get(r["id"], []) %}

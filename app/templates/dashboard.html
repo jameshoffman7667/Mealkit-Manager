@@ -11,6 +11,15 @@
   <div class="card"><b>{{ upcoming|length }}</b><span>actions in next 14 days</span></div>
 </div>
 
+{% if st.drift %}
+<div class="notice error"><b>The services show something different from the plan:</b>
+  <ul class="list">
+  {% for d in st.drift %}
+    <li>{{ st.acct_by_id[d.account_id].nickname }}, week of {{ d.week.strftime('%b %-d') }}: plan says {{ d.planned }}, the service shows {{ d.actual }}.</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
 {% if not st.accounts %}
 <p class="notice">Start by <a href="/accounts">adding an account</a>, then <a href="/promos/scan">scan</a> or
 <a href="/promos/new">enter</a> a promo code and apply it to the account.</p>
@@ -41,6 +50,8 @@
             {% if c.full_price %}<b class="warn">FULL PRICE</b>{% endif %}
             {% if c.reason %}<small>{{ c.reason }}</small>{% endif %}
             {% if c.locked %}<small>locked</small>{% endif %}
+            {% set actual = st.remote.get((a.id, w.start.isoformat())) %}
+            {% if actual %}<small class="{{ 'warn' if (actual == 'delivering') != (c.state == 'delivering') else '' }}">service: {{ actual }}</small>{% endif %}
           {% endif %}
         </td>
       {% endfor %}
