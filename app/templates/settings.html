@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+<h2>Planning horizon</h2>
+<form method="post" action="/settings" class="row">
+  <label>Weeks to plan ahead <input type="number" name="horizon_weeks" min="1" max="52" value="{{ st.horizon }}"></label>
+  <button>Save</button>
+</form>
+
+<h2>Service rules</h2>
+<p class="hint">These differ per service and change over time. Check each service's current terms and adjust.</p>
+{% for s in st.svc_rows %}
+<form method="post" action="/services/{{ s['id'] }}" class="row boxed">
+  <b class="svcname">{{ s["name"] }}</b>
+  <label>Skip cut-off (days before the week starts) <input type="number" name="skip_cutoff_days" min="0" value="{{ s['skip_cutoff_days'] }}"></label>
+  <label>Reactivate this many days before the first box <input type="number" name="reactivate_lead_days" min="0" value="{{ s['reactivate_lead_days'] }}"></label>
+  <label class="checkrow"><input type="checkbox" name="skips_consume_window" value="1"{% if s["skips_consume_window"] %} checked{% endif %}> Skipped weeks use up the discount window</label>
+  <button>Save</button>
+</form>
+{% endfor %}
+
+<h2>Recent activity</h2>
+{% if log %}
+<ul class="list">
+  {% for e in log %}<li><small>{{ e["ts"] }}</small> {{ e["event"] }}{% if e["nickname"] %} · {{ e["nickname"] }}{% endif %} {% if e["detail"] %}<small>{{ e["detail"] }}</small>{% endif %}</li>{% endfor %}
+</ul>
+{% else %}<p>Nothing yet.</p>{% endif %}
+{% endblock %}

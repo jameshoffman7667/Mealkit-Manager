@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Meal Kit Manager{% endblock %} · Meal Kit Manager</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="/">Meal Kit Manager</a>
+  <nav>
+    <a href="/">Week plan</a>
+    <a href="/actions">Actions</a>
+    <a href="/accounts">Accounts</a>
+    <a href="/promos">Promo codes</a>
+    <a href="/settings">Settings</a>
+  </nav>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+<footer>Meal Kit Manager v{{ version() }}</footer>
+</body>
+</html>

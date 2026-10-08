@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Actions{% endblock %}
+{% block content %}
+<h1>Action queue</h1>
+<p>Do each action on the service's website or app, then press Done so the plan stays accurate.
+Skips further than 3 weeks out are hidden until they get closer.</p>
+
+{% set shown = actions|selectattr("type", "ne", "skip")|list + actions|selectattr("type", "eq", "skip")|selectattr("due", "le", horizon_limit)|list %}
+{% if shown %}
+<div class="scroll">
+<table>
+  <thead><tr><th>Do by</th><th>Action</th><th>Account</th><th>Week of</th><th>Notes</th><th></th></tr></thead>
+  <tbody>
+  {% for a in shown|sort(attribute="due") %}
+    <tr class="{{ 'urgent' if a.due <= st.today else '' }}">
+      <td>{{ a.due.strftime('%a %b %-d') }}{% if a.due <= st.today %}<small class="warn">due now</small>{% endif %}</td>
+      <td><b>{{ a.type|capitalize }}</b></td>
+      <td>{{ st.acct_by_id[a.account_id].nickname }} <small>{{ st.services[st.acct_by_id[a.account_id].service_id].name }}</small></td>
+      <td>{{ a.week.strftime('%b %-d') }}</td>
+      <td>{{ a.note }}</td>
+      <td>
+        <form method="post" action="/actions/done" class="inline">
+          <input type="hidden" name="type" value="{{ a.type }}">
+          <input type="hidden" name="account_id" value="{{ a.account_id }}">
+          <input type="hidden" name="week" value="{{ a.week.isoformat() }}">
+          <button>Done</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p>No actions are due.</p>{% endif %}
+{% endblock %}

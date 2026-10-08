@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Promo codes{% endblock %}
+{% block content %}
+<h1>Promo codes</h1>
+<p>
+  <a class="button" href="/promos/scan">Scan a code with the camera</a>
+  <a class="button secondary" href="/promos/new">Enter a code by hand</a>
+</p>
+
+{% if promos %}
+<div class="scroll">
+<table>
+  <thead><tr><th>Code</th><th>Service</th><th>Offer</th><th>Scope</th><th>Expires</th><th>Status</th><th>Apply to an account</th><th></th></tr></thead>
+  <tbody>
+  {% for p in promos %}
+    <tr>
+      <td><b>{{ p["code"] }}</b>{% if p["is_winback"] %}<small>win-back offer</small>{% endif %}{% if p["description"] %}<small>{{ p["description"] }}</small>{% endif %}</td>
+      <td>{{ st.services[p["service_id"]].name }}</td>
+      <td>{% if p["discount_type"] == "percent" %}{{ "%g"|format(p["discount_value"]) }}%{% else %}${{ "%g"|format(p["discount_value"]) }}{% endif %} off, {{ p["weeks"] }} wk</td>
+      <td>{% if p["scope"] == "account" and p["account_id"] %}{{ st.acct_by_id[p["account_id"]].nickname }}{% else %}General{% endif %}</td>
+      <td>{{ p["expiry"] or "none" }}{% if p["expiry"] and p["expiry"] <= soon and p["status"] in ("available", "reserved") %}<small class="warn">expires soon</small>{% endif %}</td>
+      <td>{{ p["status"]|replace("_", " ")|capitalize }}</td>
+      <td>
+        {% if p["status"] in ("available", "reserved") %}
+        <form method="post" action="/promos/{{ p['id'] }}/apply" class="row tight">
+          <select name="account_id" required>
+            {% for a in st.accounts if a.service_id == p["service_id"] and (p["scope"] == "general" or p["account_id"] == a.id) %}
+              <option value="{{ a.id }}">{{ a.nickname }}</option>
+            {% endfor %}
+          </select>
+          <input type="date" name="start_date" value="{{ st.today.isoformat() }}" required>
+          <button>Apply</button>
+        </form>
+        {% endif %}
+      </td>
+      <td><form method="post" action="/promos/{{ p['id'] }}/delete" class="inline" onsubmit="return confirm('Delete this code?')"><button class="link">delete</button></form></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="hint">Applying a code creates a discount window on the account. The start date is the first delivery week the discount covers.</p>
+{% else %}<p>No promo codes yet.</p>{% endif %}
+{% endblock %}

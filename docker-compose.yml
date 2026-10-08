@@ -1,0 +1,19 @@
+services:
+  mealkit:
+    # Replace YOUR_DOCKERHUB_USER with your Docker Hub username (same one used in the GitHub secret).
+    image: YOUR_DOCKERHUB_USER/mealkit-manager:latest
+    # To build locally instead of pulling, uncomment:
+    # build: .
+    ports:
+      - "8000:8000"
+    environment:
+      TZ: America/Toronto
+      # Set a password to protect the portal (HTTP Basic: any username, this password).
+      APP_PASSWORD: ""
+      HORIZON_WEEKS: "12"
+    volumes:
+      - mealkit-data:/data
+    restart: unless-stopped
+
+volumes:
+  mealkit-data:

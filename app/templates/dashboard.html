@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Week plan{% endblock %}
+{% set labels = {"delivering": "Delivering", "skipped": "Skipped", "inactive": "Inactive", "waiting": "Waiting", "at_risk": "At risk"} %}
+{% block content %}
+<h1>Week plan</h1>
+
+<div class="cards">
+  <div class="card"><b>{{ active }}</b><span>active accounts</span></div>
+  <div class="card"><b>{{ coverage[0] }} of {{ coverage[1] }}</b><span>weeks covered</span></div>
+  <div class="card"><b>{{ plan.gaps|length }}</b><span>gap weeks</span></div>
+  <div class="card"><b>{{ upcoming|length }}</b><span>actions in next 14 days</span></div>
+</div>
+
+{% if not st.accounts %}
+<p class="notice">Start by <a href="/accounts">adding an account</a>, then <a href="/promos/scan">scan</a> or
+<a href="/promos/new">enter</a> a promo code and apply it to the account.</p>
+{% else %}
+<div class="scroll">
+<table class="plan">
+  <thead>
+    <tr>
+      <th>Week of</th>
+      {% for a in st.accounts %}
+      <th>{{ a.nickname }}<small>{{ st.services[a.service_id].name }}</small></th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for w in plan.weeks %}
+    <tr{% if w.empty %} class="emptyweek"{% endif %}>
+      <th>{{ w.start.strftime('%b %-d') }}
+        {% if loop.first %}<small>this week</small>{% endif %}
+        {% if w.empty %}<small>left empty</small>
+        {% elif w.delivering is none %}<small class="warn">gap: no discounted box</small>{% endif %}
+      </th>
+      {% for a in st.accounts %}
+        {% set c = w.cells.get(a.id) %}
+        <td class="{{ c.state if c else '' }}">
+          {% if c %}
+            <span class="tag">{{ labels[c.state] }}</span>
+            {% if c.full_price %}<b class="warn">FULL PRICE</b>{% endif %}
+            {% if c.reason %}<small>{{ c.reason }}</small>{% endif %}
+            {% if c.locked %}<small>locked</small>{% endif %}
+          {% endif %}
+        </td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="hint">The current week and any week inside a service's skip cut-off are marked locked. If the plan
+for a locked week does not match what the service will really send, use an override below.</p>
+{% endif %}
+
+<h2>Next actions</h2>
+{% if upcoming %}
+<ul class="list">
+  {% for a in upcoming %}
+  <li><b>{{ a.type|capitalize }}</b> {{ st.acct_by_id[a.account_id].nickname }}
+    (week of {{ a.week.strftime('%b %-d') }}) by <b>{{ a.due.strftime('%b %-d') }}</b>
+    {% if a.note %}<small>{{ a.note }}</small>{% endif %}</li>
+  {% endfor %}
+</ul>
+<p><a href="/actions">Open the action queue</a></p>
+{% else %}<p>Nothing due in the next 14 days.</p>{% endif %}
+
+{% if st.accounts %}
+<h2>Override a week</h2>
+<form method="post" action="/overrides" class="row">
+  <label>Week <input type="date" name="week_start" required></label>
+  <label>Override
+    <select name="kind">
+      <option value="force">Force this account to deliver</option>
+      <option value="block">Block this account</option>
+      <option value="empty">Leave the week empty</option>
+    </select>
+  </label>
+  <label>Account
+    <select name="account_id">
+      <option value="">(none)</option>
+      {% for a in st.accounts %}<option value="{{ a.id }}">{{ a.nickname }}</option>{% endfor %}
+    </select>
+  </label>
+  <button>Add override</button>
+</form>
+{% if st.ovr_rows %}
+<ul class="list">
+  {% for o in st.ovr_rows %}
+  <li>{{ o["week_start"] }}: {{ o["kind"] }}{% if o["account_id"] %} · {{ st.acct_by_id[o["account_id"]].nickname }}{% endif %}
+    {% if o["committed"] %}<small>(order already locked)</small>{% endif %}
+    <form method="post" action="/overrides/{{ o['id'] }}/delete" class="inline"><button class="link">remove</button></form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+{% endblock %}

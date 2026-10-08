@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Accounts{% endblock %}
+{% block content %}
+<h1>Accounts</h1>
+
+<form method="post" action="/accounts" class="row boxed">
+  <label>Service
+    <select name="service_id">
+      {% for s in st.svc_rows %}<option value="{{ s['id'] }}">{{ s['name'] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Nickname <input name="nickname" required placeholder="HF main"></label>
+  <label>Email <input name="email" type="email" placeholder="optional"></label>
+  <label>Status
+    <select name="status">
+      <option value="active">Active</option>
+      <option value="cancelled">Cancelled</option>
+      <option value="paused">Paused</option>
+    </select>
+  </label>
+  <button>Add account</button>
+</form>
+
+{% for r in st.acct_rows %}
+<section class="account">
+  <h2>{{ r["nickname"] }} <small>{{ st.services[r["service_id"]].name }}{% if r["email"] %} · {{ r["email"] }}{% endif %}</small></h2>
+  <form method="post" action="/accounts/{{ r['id'] }}/update" class="row">
+    <label>Status
+      <select name="status">
+        {% for v in ["active", "cancelled", "paused"] %}<option value="{{ v }}"{% if r["status"] == v %} selected{% endif %}>{{ v|capitalize }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Cancel and skip mode
+      <select name="automation">
+        {% for v, t in [("auto", "Auto"), ("ask", "Ask first"), ("remind", "Remind only")] %}<option value="{{ v }}"{% if r["automation"] == v %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <button>Save</button>
+  </form>
+  <p class="hint">Version 0.1 plans and reminds only. You perform each action on the service's site, then mark it done in the action queue.</p>
+
+  <h3>Discount windows</h3>
+  {% set wl = wins_by_acct.get(r["id"], []) %}
+  {% if wl %}
+  <table>
+    <thead><tr><th>Label</th><th>Starts</th><th>Weeks</th><th>Left</th><th>Ends</th><th></th></tr></thead>
+    <tbody>
+    {% for w in wl %}
+      {% set used = st.used.get(w["id"], 0) %}
+      <tr>
+        <td>{{ w["label"] }}</td>
+        <td>{{ w["start_date"] }}</td>
+        <td>{{ w["weeks"] }}</td>
+        <td>{% if st.services[r["service_id"]].skips_consume_window %}by date{% else %}{{ [w["weeks"] - used, 0]|max }} boxes{% endif %}</td>
+        <td>{{ ends.get(w["id"]) or "after the plan horizon" }}</td>
+        <td><form method="post" action="/windows/{{ w['id'] }}/delete" class="inline"><button class="link">delete</button></form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p>No discount windows. Apply a promo code, or add one by hand.</p>{% endif %}
+
+  <details>
+    <summary>Add a discount window by hand</summary>
+    <form method="post" action="/windows" class="row">
+      <input type="hidden" name="account_id" value="{{ r['id'] }}">
+      <label>Label <input name="label" placeholder="Return offer"></label>
+      <label>Starts (first delivery week) <input type="date" name="start_date" required></label>
+      <label>Discounted weeks <input type="number" name="weeks" min="1" max="52" value="4" required></label>
+      <label>Discount per box <input type="number" name="discount_value" step="0.01" min="0" value="0"></label>
+      <button>Add window</button>
+    </form>
+  </details>
+
+  <form method="post" action="/accounts/{{ r['id'] }}/delete" onsubmit="return confirm('Delete this account and its history?')">
+    <button class="danger">Delete account</button>
+  </form>
+</section>
+{% else %}
+<p>No accounts yet.</p>
+{% endfor %}
+{% endblock %}

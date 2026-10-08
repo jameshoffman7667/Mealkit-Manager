@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{% if scanned is defined %}Confirm scanned code{% else %}Add promo code{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if scanned is defined %}Confirm the scanned code{% else %}Add a promo code{% endif %}</h1>
+
+{% for n in notes %}<p class="notice">{{ n }}</p>{% endfor %}
+{% if scanned is defined %}<p class="hint">Fields marked "check" were uncertain. Nothing is saved until you press Save.</p>{% endif %}
+
+<form method="post" action="/promos" class="stack boxed">
+  <label>Service
+    <select name="service_id" required class="{{ 'check' if 'service' in low }}">
+      {% for s in st.svc_rows %}<option value="{{ s['id'] }}"{% if p.service == s['id'] %} selected{% endif %}>{{ s['name'] }}</option>{% endfor %}
+    </select>
+    {% if 'service' in low %}<small class="warn">check</small>{% endif %}
+  </label>
+  <label>Code
+    <input name="code" value="{{ p.code }}" required list="cands" autocapitalize="characters" class="{{ 'check' if 'code' in low }}">
+    {% if 'code' in low %}<small class="warn">check</small>{% endif %}
+  </label>
+  <datalist id="cands">{% for c in candidates %}<option value="{{ c }}">{% endfor %}</datalist>
+  {% if candidates|length > 1 %}<p class="hint">Other possible codes: {{ candidates[1:]|join(", ") }}</p>{% endif %}
+  <label>Description <input name="description" value="{{ p.description }}" placeholder="optional"></label>
+  <div class="row">
+    <label>Discount type
+      <select name="discount_type">
+        <option value="percent"{% if p.discount_type == "percent" %} selected{% endif %}>Percent off</option>
+        <option value="fixed"{% if p.discount_type == "fixed" %} selected{% endif %}>Dollars off per box</option>
+      </select>
+    </label>
+    <label>Amount <input name="discount_value" type="number" step="0.01" min="0" value="{{ p.discount_value }}" class="{{ 'check' if 'discount_value' in low }}"></label>
+    <label>Discounted weeks <input name="weeks" type="number" min="1" max="52" value="{{ p.weeks or 1 }}" class="{{ 'check' if 'weeks' in low }}"></label>
+  </div>
+  <div class="row">
+    <label>Scope
+      <select name="scope">
+        <option value="general"{% if p.scope == "general" %} selected{% endif %}>General (any account on the service)</option>
+        <option value="account"{% if p.scope == "account" %} selected{% endif %}>Account-specific</option>
+      </select>
+    </label>
+    <label>Account (if account-specific)
+      <select name="account_id">
+        <option value="">(none)</option>
+        {% for a in st.accounts %}<option value="{{ a.id }}"{% if p.account_id|string == a.id|string %} selected{% endif %}>{{ a.nickname }} ({{ st.services[a.service_id].name }})</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="row">
+    <label>Expires <input name="expiry" type="date" value="{{ p.expiry }}" class="{{ 'check' if 'expiry' in low }}">
+      {% if 'expiry' in low %}<small class="warn">check</small>{% endif %}</label>
+    <label>Source <input name="source" value="{{ p.source }}" placeholder="email, friend, flyer"></label>
+  </div>
+  <label class="checkrow"><input type="checkbox" name="is_winback" value="1"{% if p.is_winback %} checked{% endif %}> Win-back offer sent to one account (makes it account-specific)</label>
+  <button>Save code</button>
+</form>
+
+{% if raw %}
+<details><summary>Text read from the photo</summary><pre>{{ raw }}</pre></details>
+{% endif %}
+{% endblock %}

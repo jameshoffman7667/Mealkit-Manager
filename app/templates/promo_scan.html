@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Scan a promo code{% endblock %}
+{% block content %}
+<h1>Scan a promo code</h1>
+{% if error %}<p class="notice error">{{ error }}</p>{% endif %}
+<form method="post" action="/promos/scan" enctype="multipart/form-data" class="boxed">
+  <p>Take a photo of the code (an email, a flyer or a card). On a phone this opens the camera.
+  You will review and edit what was read before anything is saved.</p>
+  <label class="bigfile">Photo
+    <input type="file" name="photo" accept="image/*" capture="environment" required>
+  </label>
+  <button>Read the code</button>
+</form>
+<p class="hint">The photo is read in memory and discarded. It is never stored. Skip this and <a href="/promos/new">enter the code by hand</a>.</p>
+{% endblock %}
