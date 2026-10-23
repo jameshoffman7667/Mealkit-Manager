@@ -4,7 +4,18 @@ Requests are logged here and built only when James sends a build message (for ex
 
 ## Pending
 
-(nothing pending)
+### P-5 - Fix deploy notes from the first server update
+Requested: 2026-10-22 (James attached Claude Code's update plan with its feedback "for the mealkit chat")
+Type: patch (deploy files and notes only; no app change)        Status: Pending
+From the plan (facts reported by Claude Code):
+- `deploy/RELEASE.md` says "Public hostname: TBD, Claude Code to confirm the existing hostname". There is none today: the app is LAN-only (port 3600) with no Caddy route and no Cloudflare hostname. Say so, and list what installing it needs (new https hostname, Caddy route, tunnel hostname to http://caddy:80, Access bypass paths /manifest.webmanifest, /sw.js, /icons/*, /static/*, /offline, /healthz). Also "Needs Caddy route: yes, upstream port changes to 8044" should read "new route needed".
+- Verify command: vm101 has `wget` but not `curl`; the host check is `wget -qO- http://127.0.0.1:8044/healthz` (the container healthcheck still uses `curl`, which the image has).
+- `deploy/compose.yaml` differs from the server stack (service name `mealkit`, not `mealkit-manager`; empty APP_PASSWORD; no PORT, SYNC_HOURS, AUTOMATION, user, healthcheck or limits). Bring the reference file in line with what the server will run after the update (service name `mealkit`).
+- Rollback note: v0.3 runs as uid 10001, so a rollback means restoring the pre-update data copy (it keeps the old owner). Replace the "chown back" wording.
+- Add the root step to RELEASE.md: after the data copy, `sudo chown -R 1000:100 <data folder>` before the first start.
+Notes / questions:
+- Decision for the server update (James): start with AUTOMATION=off or on? Both are safe until SECRET_KEY is set and an account is linked and live; nothing else in the app reads it. Not a code change.
+- Should the compose default for AUTOMATION change to `off` in deploy/compose.yaml? (my suggestion: yes, until the connectors are checked on the live sites)
 
 ## Done
 
