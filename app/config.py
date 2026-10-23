@@ -59,3 +59,11 @@ def sync_hours() -> float:
 def debug_capture() -> bool:
     """When on, connectors save the text of each page they read to DATA_DIR/debug (contains personal data)."""
     return os.environ.get("CONNECTOR_DEBUG", "").strip().lower() in ("1", "true", "on", "yes")
+
+
+def port() -> int:
+    """The HTTP port the app listens on. The container port equals the host port (spec: 8044)."""
+    try:
+        return int(os.environ.get("PORT", "8044"))
+    except ValueError:
+        return 8044

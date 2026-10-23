@@ -1,0 +1,26 @@
+# Runs the tests on every push and pull request. It builds and publishes nothing:
+# images are built only by release.yml when a vMAJOR.MINOR.PATCH tag is pushed.
+name: test
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "*.md"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Tesseract
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
+      - name: Install and test
+        run: |
+          pip install -r requirements-dev.txt
+          pytest -q

@@ -1,6 +1,6 @@
 """Week assignment engine (pure functions, no database access).
 
-Rules, in priority order (see FUNCTIONAL_SPEC.md section 5.2):
+Rules, in priority order (see functional-spec.md section 5.2):
   1. One delivery per week across all accounts.
   2. Only accounts with a usable discount window can deliver.
   3. Every live account that is not delivering is skipped.

@@ -1,0 +1,21 @@
+{
+  "name": "Meal Kit Subscription Manager",
+  "short_name": "Meal Kits",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f6f2",
+  "theme_color": "#2f6f4f",
+  "description": "Plans continuous discounted meal-kit delivery across HelloFresh, Chef's Plate and Good Food accounts.",
+  "icons": [
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "screenshots": [
+    {"src": "/static/screenshots/wide.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Week plan on a desktop"},
+    {"src": "/static/screenshots/narrow.png", "sizes": "540x960", "type": "image/png", "form_factor": "narrow", "label": "Week plan on a phone"}
+  ]
+}

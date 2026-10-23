@@ -183,9 +183,48 @@ def test_cannot_go_live_before_a_successful_sync(client):
         assert c.execute("SELECT dry_run FROM accounts WHERE id=1").fetchone()["dry_run"] == 1
 
 
-def test_port_is_3800_in_deploy_files():
-    from pathlib import Path
-    root = Path(__file__).resolve().parent.parent
-    assert "EXPOSE 3800" in (root / "Dockerfile").read_text()
-    assert "--port\", \"3800\"" in (root / "Dockerfile").read_text()
-    assert "3800:3800" in (root / "docker-compose.yml").read_text()
+def test_healthz_and_pwa_routes(client):
+    r = client.get("/healthz")
+    assert r.status_code == 200 and r.json() == {"status": "ok", "version": config.version()}
+    m = client.get("/manifest.webmanifest")
+    assert m.status_code == 200 and m.headers["content-type"].startswith("application/manifest+json")
+    assert m.json()["start_url"] == "/" and m.headers["cache-control"] == "no-cache"
+    sw = client.get("/sw.js")
+    assert sw.status_code == 200 and "javascript" in sw.headers["content-type"]
+    assert sw.headers["cache-control"] == "no-cache" and sw.headers["service-worker-allowed"] == "/"
+    assert f'"{config.version()}"' in sw.text
+    assert client.get("/icons/icon-192.png").headers["content-type"] == "image/png"
+    assert client.get("/icons/../main.py").status_code == 404
+    assert "offline" in client.get("/offline").text.lower()
+    page = client.get("/")
+    assert 'rel="manifest"' in page.text and "/static/app.js" in page.text and 'class="nav"' in page.text
+
+
+def test_pwa_files_stay_public_behind_the_password(client, monkeypatch):
+    monkeypatch.setenv("APP_PASSWORD", "s3cret")
+    for path in ("/healthz", "/manifest.webmanifest", "/sw.js", "/offline", "/icons/icon-512.png",
+                 "/static/style.css"):
+        assert client.get(path).status_code == 200, path
+    assert client.get("/").status_code == 401 and client.get("/export.json").status_code == 401
+
+
+def test_export_has_no_logins(client, monkeypatch):
+    from app import connectors
+    monkeypatch.setenv("SECRET_KEY", "a-long-enough-secret-key")
+    monkeypatch.setattr(connectors, "FACTORY", lambda sid, e, p: _FakeConn())
+    add_account(client, "HF main")
+    client.post("/accounts/1/link", data={"email": "a@b.c", "password": "hunter2-pw"})
+    r = client.get("/export.json")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    data = r.json()
+    assert data["accounts"][0]["nickname"] == "HF main" and "cred_enc" not in data["accounts"][0]
+    assert "hunter2" not in r.text
+
+
+def test_port_default_is_8044(monkeypatch):
+    monkeypatch.delenv("PORT", raising=False)
+    assert config.port() == 8044
+    monkeypatch.setenv("PORT", "9000")
+    assert config.port() == 9000
+    monkeypatch.setenv("PORT", "junk")
+    assert config.port() == 8044

@@ -240,9 +240,12 @@ Each service connector implements the same interface: sign in, read status, read
 
 ### 10.1 Packaging
 
-- The app ships as one Docker image that serves the web portal and the scheduler from a single container, listening on port 3800 (from v0.3; v0.1 and v0.2 used port 8000).
-- Configuration through environment variables; data kept on a mounted volume; a health endpoint for monitoring.
-- The portal is responsive and works on mobile browsers.
+- The app ships as one Docker image that serves the web portal and the scheduler from a single container, listening on port 8044 (set by `PORT`; container port = host port). Earlier builds used 8000 (v0.1, v0.2) and 3800 (v0.3).
+- Configuration through environment variables (`PORT`, `APP_PASSWORD`, `SECRET_KEY`, `HORIZON_WEEKS`, `SYNC_HOURS`, `AUTOMATION`, `TZ`, `DATA_DIR`, `CONNECTOR_DEBUG`); data kept on a mounted volume `/data`.
+- `GET /healthz` returns `{status, version}` when the database answers (503 otherwise); `/health` is kept for older monitors. Both are public.
+- The image runs as 1000:100 under `tini`, stops within a few seconds on SIGTERM, and includes Tesseract and Chromium (large image).
+- The database has a `schema_version` table. Before an upgrade changes an older database, a copy is written to `/data/backups/pre-migrate-<from>-to-<to>-<time>.db`. Upgrades never delete data.
+- Settings > Download all data returns every table as JSON, without stored logins (`/export.json`).
 
 ### 10.2 Promo code capture by photo
 
@@ -257,20 +260,42 @@ Each service connector implements the same interface: sign in, read status, read
 
 ### 10.3 Source control and automated publishing
 
-- The project lives in a GitHub repository.
-- A GitHub Actions workflow runs on every push to the main branch, builds the image, and pushes it to Docker Hub tagged with the version and `latest`.
-- Docker Hub credentials are stored as repository secrets, never in the code.
+- The project lives in the GitHub repository `jameshoffman7667/Mealkit-Manager`; `main` is the default branch.
+- Pushing a tag `vMAJOR.MINOR.PATCH` runs `.github/workflows/release.yml`: it checks that `VERSION`, the tag and the `CHANGELOG.md` entry agree (short text 50 characters or fewer, long text 250 or fewer), builds `linux/amd64`, pushes `mybadreligon/mealkit-manager:X.Y.Z`, `X.Y` and `latest` to Docker Hub, and creates the GitHub release as its last step.
+- Plain pushes to `main` build nothing; `.github/workflows/test.yml` runs the tests.
+- Docker Hub credentials are repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, never in the code.
+- Each release leaves `deploy/compose.yaml` (image pinned to the version), `deploy/.env.example` and `deploy/RELEASE.md` (what the deploy needs for that version). `RELEASE.md` has a fixed `Update:` line: `Update: now` only when the build message for that release was "build, push and update", otherwise `Update: later`.
 
 ### 10.4 Versioning
 
-- The first build is v0.1. Every build increments the version (v0.2, v0.3, and so on).
-- The version lives in one `VERSION` file, appears in the portal footer, and is used for the git tag and the Docker image tag.
+- Format MAJOR.MINOR.PATCH. Bug fixes and small changes bump PATCH, new features and screens bump MINOR, and the first digit changes only when James says "major revision". No digit has a cap.
+- v0.1 to v0.3 used two-part versions; the first release in the standard flow is v0.4.0.
+- The version lives in the `VERSION` file, appears in the portal footer and `/healthz`, and is used for the git tag, the image tag and the service worker cache name (a test keeps them equal).
 
 ### 10.5 Working agreement
 
-- Requested changes are logged in the change log as they are sent; nothing is built until the instruction "build it and push it".
-- Each change log entry carries a short commit message (50 characters or fewer) and a long commit message (250 characters or fewer).
-- One zip is always kept current, containing the functional spec, the change log and the project files.
+- Requests are logged in `docs/pending-changes.md`; nothing is built until James sends a build message ("build P-1", "build and push", "build, push and update").
+- Each release's `CHANGELOG.md` entry carries a short message (50 characters or fewer) and a long message (250 characters or fewer), used as the commit message and the release title.
+- One zip is kept current, containing the functional spec, the change log and the project files.
+
+### 10.6 Mobile layout (under 1024 px wide)
+
+- One column. A bottom tab bar (Week plan, Actions, Accounts, Promo codes, Settings) with 56 px high targets and safe-area padding; a slim top bar with the app name.
+- Tables become cards (one per week, action or promo code) so nothing scrolls sideways; forms stack and use the whole width. Photo capture opens the phone camera.
+- Checked at 320, 390 and 768 px wide: no horizontal scrolling.
+
+### 10.7 Desktop layout (1024 px and wider)
+
+- A fixed left sidebar with the same five sections and the app name; content up to 1200 px wide; tables show as tables, with the week plan as one column per account.
+- Keyboard navigation with a visible focus outline and a skip-to-content link.
+
+### 10.8 PWA
+
+- Installable on phone and desktop (needs the https address; a plain LAN address is not installable). `manifest.webmanifest` (standalone, theme colours, 192, 512 and maskable 512 icons, wide and narrow screenshots), an Apple touch icon, and Install app in Settings (with iPhone instructions).
+- The service worker (`/sw.js`, scope `/`) precaches only the app shell and the offline page. Pages and data are never cached; page loads go to the network, and the offline page is shown only when the server cannot be reached.
+- A new version shows "A new version is ready. Reload"; it never takes over silently, and the first install does not reload the page. Old caches are deleted when a new worker activates. The cache name carries the app version.
+- With `APP_PASSWORD` set, these stay public so installation works: `/healthz`, `/health`, `/manifest.webmanifest`, `/sw.js`, `/offline`, `/icons/*`, `/static/*`. Behind Cloudflare Access the same paths need a bypass policy.
+- Light and dark colour schemes follow the device setting.
 
 ## 11. Implementation status
 
@@ -289,6 +314,15 @@ Each service connector implements the same interface: sign in, read status, read
 | Packaging and release | Built | Section 10.1 to 10.4: Docker image, GitHub Actions to Docker Hub, VERSION file. |
 | Security | Minimal | Optional shared password. No 2FA. No credentials are stored because accounts are not linked. |
 
+### v0.4.0 (built 2026-10-22): release flow, port 8044 and PWA
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Release flow | Built | Section 10.3: tag-triggered build and push of `mybadreligon/mealkit-manager`, GitHub release as the last step, deploy files, `Update:` field. Not run end to end until the first tag is pushed. |
+| Port | Built | 8044 by default, from `PORT`. |
+| PWA and layouts | Built | Sections 10.6 to 10.8. Checked on rendered pages in Chromium (service worker, offline page, widths); Lighthouse not run; not yet checked behind Cloudflare. |
+| Operations | Built | `/healthz`, `tini`, user 1000:100, schema version with a pre-upgrade copy, JSON export. Clean stop on SIGTERM relies on uvicorn and tini and was not run here. |
+
 ### 11.2 v0.3 (built 2026-10-07): linked accounts and automatic actions
 
 Requirements LK-1 to LK-8 below, with how each was built. Differences from the wording are in the status table that follows.
@@ -304,7 +338,7 @@ Requirements LK-1 to LK-8 below, with how each was built. Differences from the w
 | LK-7 | Every automated action is stored in the activity log with time, result and evidence (page text or confirmation number). |
 | LK-8 | Newly linked accounts start in dry-run mode: the connector reads and reports what it would do without changing anything. The user switches the account to Ask first or Auto after checking the results. |
 
-Connector design note (CL-0007): connectors are Python Playwright flows with one page profile per service (paths and selectors, overridable in `connectors.json` without a rebuild), no stealth or bot evasion. The open-source mcp-hellofresh project was a reference only. Every action is verified by re-reading the account.
+Connector design note (change log CL-0007): connectors are Python Playwright flows with one page profile per service (paths and selectors, overridable in `connectors.json` without a rebuild), no stealth or bot evasion. The open-source mcp-hellofresh project was a reference only. Every action is verified by re-reading the account.
 
 | Requirement | v0.3 status | Notes |
 | --- | --- | --- |
@@ -316,6 +350,6 @@ Connector design note (CL-0007): connectors are Python Playwright flows with one
 | LK-6 | Built, differs | Refuses if a payment problem is visible, or if a box after the last discounted one cannot be skipped. A pending unpaid order is detected only from payment wording on the page. |
 | LK-7 | Built, differs | The log records time, result and a short status summary (counts of delivering/skipped weeks), not page text, to avoid storing personal data. `CONNECTOR_DEBUG=1` saves page text locally for fixing selectors. |
 | LK-8 | Built | New links start in dry-run. Live changes can be switched on only after a successful sign-in test. |
-| Port 3800 | Built | Dockerfile, health check, compose and README. |
+| Port | Built | 3800 in v0.3; 8044 from v0.4.0. |
 
 Constraints: the services offer no public APIs, so connectors drive their websites and will break when those sites change; automating accounts may breach a service's terms (section 9.1); the app cannot read or act on an account until the login works and any verification step is completed by the user.

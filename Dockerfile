@@ -4,11 +4,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data \
     TZ=America/Toronto \
+    PORT=8044 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Tesseract provides the text recognition for photographed promo codes.
+# tini forwards SIGTERM so the container stops cleanly. Tesseract reads photographed promo codes.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tzdata curl \
+    && apt-get install -y --no-install-recommends tini tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tzdata curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /srv
@@ -23,12 +24,15 @@ RUN playwright install --with-deps chromium \
 COPY VERSION ./VERSION
 COPY app ./app
 
-RUN useradd --system --uid 10001 app && mkdir -p /data && chown app /data
-USER app
+# Run as 1000:100 so the data folder owner matches the server standard.
+RUN useradd --system --uid 1000 --gid 100 --no-create-home app \
+    && mkdir -p /data && chown 1000:100 /data
+USER 1000:100
 VOLUME /data
-EXPOSE 3800
+EXPOSE 8044
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD curl -fsS http://localhost:3800/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" >/dev/null || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3800"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --timeout-graceful-shutdown 8"]

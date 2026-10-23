@@ -1,0 +1,32 @@
+services:
+  mealkit-manager:
+    image: mybadreligon/mealkit-manager:0.4.0
+    container_name: mealkit-manager
+    restart: unless-stopped
+    user: "1000:100"                         # the image runs as 1000:100; PUID/PGID are not used
+    environment:
+      - TZ=America/Toronto
+      - PORT=${PORT_HOST:-8044}
+      - APP_PASSWORD=${MEALKIT_APP_PASSWORD:-}
+      - SECRET_KEY=${MEALKIT_SECRET_KEY:-}   # needed only to link accounts (16+ characters)
+      - HORIZON_WEEKS=${HORIZON_WEEKS:-12}
+      - SYNC_HOURS=${SYNC_HOURS:-6}
+      - AUTOMATION=${AUTOMATION:-on}
+    ports:
+      - "${PORT_HOST:-8044}:${PORT_HOST:-8044}"   # container port = host port
+    volumes:
+      - ${FAST_STORAGE:-/srv/dev-disk-by-uuid-758425e9-f9ca-4fbc-ad81-eaea80fdfb73/appdata-ssd}/mealkit-manager:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${PORT}/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 15s
+    mem_limit: 1g                            # Chromium runs during account syncs
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

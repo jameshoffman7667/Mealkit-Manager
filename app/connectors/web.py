@@ -32,7 +32,7 @@ class WebConnector(Connector):
             raise ConnectorError("Playwright is not installed on this server.")
         try:
             self._pw = sync_playwright().start()
-            self._browser = self._pw.chromium.launch(headless=True, args=["--no-sandbox"])
+            self._browser = self._pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
             ctx = self._browser.new_context(locale="en-CA", viewport={"width": 1280, "height": 1600})
             self.page = ctx.new_page()
             self.page.set_default_timeout(20000)

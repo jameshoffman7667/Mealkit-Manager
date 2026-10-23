@@ -25,7 +25,7 @@
 <a href="/promos/new">enter</a> a promo code and apply it to the account.</p>
 {% else %}
 <div class="scroll">
-<table class="plan">
+<table class="plan stack-sm">
   <thead>
     <tr>
       <th>Week of</th>
@@ -44,7 +44,7 @@
       </th>
       {% for a in st.accounts %}
         {% set c = w.cells.get(a.id) %}
-        <td class="{{ c.state if c else '' }}">
+        <td class="{{ c.state if c else '' }}" data-label="{{ a.nickname }}">
           {% if c %}
             <span class="tag">{{ labels[c.state] }}</span>
             {% if c.full_price %}<b class="warn">FULL PRICE</b>{% endif %}

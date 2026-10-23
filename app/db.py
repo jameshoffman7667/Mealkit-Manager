@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS remote_weeks(
   checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (account_id, week_start)
 );
+CREATE TABLE IF NOT EXISTS schema_version(
+  version INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS actions_done(
   key TEXT PRIMARY KEY,
   done_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -138,10 +141,61 @@ def migrate(c) -> None:
             c.execute(f"ALTER TABLE accounts ADD COLUMN {name} {ddl}")
 
 
+# 1 = v0.1/v0.2 tables, 2 = v0.3 account link columns and remote_weeks.
+CURRENT_SCHEMA = 2
+
+
+def detect_version(conn) -> int:
+    """Schema version of an existing database (0 = empty or new)."""
+    names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "schema_version" in names:
+        row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
+        if row and row[0]:
+            return int(row[0])
+    if "accounts" in names:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(accounts)")}
+        return 2 if "link_state" in cols else 1
+    return 0
+
+
+def backup_before_migration(old: int) -> None:
+    """Copy the database before an upgrade changes it. Returns nothing; the copy is the safety net."""
+    import logging
+    import sqlite3
+    from datetime import datetime
+    dest_dir = config.data_dir() / "backups"
+    dest_dir.mkdir(exist_ok=True)
+    dest = dest_dir / f"pre-migrate-{old}-to-{CURRENT_SCHEMA}-{datetime.now():%Y%m%d-%H%M%S}.db"
+    src = sqlite3.connect(config.db_path())
+    try:
+        out = sqlite3.connect(dest)
+        try:
+            src.backup(out)
+        finally:
+            out.close()
+    finally:
+        src.close()
+    logging.getLogger("uvicorn.error").info("database copied to %s before migrating schema %s -> %s",
+                                            dest, old, CURRENT_SCHEMA)
+
+
 def init() -> None:
+    import sqlite3
+    path = config.db_path()
+    if path.exists() and path.stat().st_size > 0:
+        probe = sqlite3.connect(path)
+        try:
+            old = detect_version(probe)
+        finally:
+            probe.close()
+        if 0 < old < CURRENT_SCHEMA:
+            backup_before_migration(old)
     with session() as c:
         c.executescript(SCHEMA)
         migrate(c)
+        if not c.execute("SELECT 1 FROM schema_version WHERE version >= ?", (CURRENT_SCHEMA,)).fetchone():
+            c.execute("DELETE FROM schema_version")
+            c.execute("INSERT INTO schema_version(version) VALUES (?)", (CURRENT_SCHEMA,))
         for sid, name in SEED_SERVICES:
             c.execute("INSERT OR IGNORE INTO services(id, name) VALUES (?, ?)", (sid, name))
 

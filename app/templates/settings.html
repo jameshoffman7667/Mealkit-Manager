@@ -3,6 +3,15 @@
 {% block content %}
 <h1>Settings</h1>
 
+<h2>Install and back up</h2>
+<div id="install-box" class="install-box" hidden>
+  <p id="install-done" hidden>This app is installed on this device.</p>
+  <button id="install-btn" type="button" hidden>Install app</button>
+  <p id="install-ios" hidden>On iPhone or iPad: tap Share, then Add to Home Screen.</p>
+</div>
+<p class="hint">The app can be installed on a phone or computer when you open it through its https address.</p>
+<p><a class="button secondary" href="/export.json" download>Download all data (JSON, without logins)</a></p>
+
 <h2>Planning horizon</h2>
 <form method="post" action="/settings" class="row">
   <label>Weeks to plan ahead <input type="number" name="horizon_weeks" min="1" max="52" value="{{ st.horizon }}"></label>

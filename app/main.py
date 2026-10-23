@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from urllib.parse import quote
 from fastapi.templating import Jinja2Templates
@@ -46,10 +46,16 @@ templates.env.globals["version"] = config.version
 
 
 # ---------- auth (optional) ----------
+# Public so the browser can install the app and the server can check it: health, PWA files, static assets.
+PUBLIC_PATHS = {"/health", "/healthz", "/manifest.webmanifest", "/sw.js", "/offline"}
+PUBLIC_PREFIXES = ("/static/", "/icons/")
+
+
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
     pw = config.app_password()
-    if pw and request.url.path != "/health":
+    path = request.url.path
+    if pw and path not in PUBLIC_PATHS and not path.startswith(PUBLIC_PREFIXES):
         ok = False
         header = request.headers.get("authorization", "")
         if header.lower().startswith("basic "):
@@ -66,6 +72,47 @@ async def basic_auth(request: Request, call_next):
 @app.get("/health")
 def health():
     return {"status": "ok", "version": config.version()}
+
+
+@app.get("/healthz")
+def healthz():
+    """Cheap unauthenticated check: the database answers and the version is reported."""
+    try:
+        with db.session() as c:
+            c.execute("SELECT 1").fetchone()
+    except Exception:
+        return JSONResponse({"status": "error", "version": config.version()}, status_code=503)
+    return {"status": "ok", "version": config.version()}
+
+
+# ---------- PWA files (served from the root so the service worker can control the whole app) ----------
+NO_CACHE = {"Cache-Control": "no-cache"}
+ICON_DIR = BASE / "static" / "icons"
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return FileResponse(BASE / "static" / "manifest.webmanifest", media_type="application/manifest+json",
+                        headers=NO_CACHE)
+
+
+@app.get("/sw.js")
+def service_worker():
+    return FileResponse(BASE / "static" / "sw.js", media_type="text/javascript",
+                        headers={**NO_CACHE, "Service-Worker-Allowed": "/"})
+
+
+@app.get("/icons/{name}")
+def icon(name: str):
+    path = ICON_DIR / name
+    if path.parent != ICON_DIR or not path.is_file():
+        raise HTTPException(404, "Not found")
+    return FileResponse(path, headers=NO_CACHE)
+
+
+@app.get("/offline")
+def offline_page(request: Request):
+    return templates.TemplateResponse(request, "offline.html", {})
 
 
 # ---------- helpers ----------
@@ -449,6 +496,23 @@ def action_approve(type: str = Form(...), account_id: int = Form(...), week: str
         return flash("/actions", "This account is in dry-run. Switch it to live on the Accounts page first.")
     ok, msg = automation.execute_action(type, account_id, wk)
     return flash("/actions", ("Done. " if ok else "Not done: ") + msg)
+
+
+# ---------- export ----------
+@app.get("/export.json")
+def export_data():
+    """All planning data as JSON. Stored logins are never included."""
+    tables = ["services", "accounts", "promo_codes", "windows", "deliveries", "overrides",
+              "remote_weeks", "event_log", "settings"]
+    out = {"app": "mealkit-manager", "version": config.version()}
+    with db.session() as c:
+        for t in tables:
+            rows = [dict(r) for r in c.execute(f"SELECT * FROM {t}")]
+            if t == "accounts":
+                for r in rows:
+                    r.pop("cred_enc", None)
+            out[t] = rows
+    return JSONResponse(out, headers={"Content-Disposition": 'attachment; filename="mealkit-export.json"'})
 
 
 # ---------- settings ----------

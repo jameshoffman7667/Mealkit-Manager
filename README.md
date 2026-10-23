@@ -2,21 +2,22 @@
 
 Plans continuous, discounted meal-kit delivery across several accounts and services (HelloFresh, Chef's Plate, Good Food). It tracks each account's discount window, decides which account delivers each week, tells you which weeks to skip, and tells you when to cancel so no account rolls onto full price.
 
-The app is a **planner first**: you enter accounts, promo codes and offers, and it plans and reminds; you can do each skip, cancel and reactivate yourself and mark it done. From v0.3 you can also **link an account** (its login, stored encrypted) so the app reads the real status and weeks and, when you allow it, performs skips, reactivations and cancellations for you. See `docs/FUNCTIONAL_SPEC.md`.
+The app is a **planner first**: you enter accounts, promo codes and offers, and it plans and reminds; you can do each skip, cancel and reactivate yourself and mark it done. From v0.3 you can also **link an account** (its login, stored encrypted) so the app reads the real status and weeks and, when you allow it, performs skips, reactivations and cancellations for you. See `docs/functional-spec.md`.
 
 ## Run it
 
 ```bash
-docker run -d --name mealkit -p 3800:3800 -v mealkit-data:/data \
+docker run -d --name mealkit-manager -p 8044:8044 -v mealkit-data:/data \
   -e TZ=America/Toronto -e APP_PASSWORD=choose-a-password \
-  YOUR_DOCKERHUB_USER/mealkit-manager:latest
+  mybadreligon/mealkit-manager:latest
 ```
 
-Open `http://localhost:3800`. Or use `docker compose up -d` with the included `docker-compose.yml`.
+Open `http://localhost:8044`. On the home server use `deploy/compose.yaml` (see `deploy/RELEASE.md`). The container runs as user 1000:100, so a data folder you mount must be owned by that user. To install the app on a phone or computer, open it through its `https://` address.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `APP_PASSWORD` | empty (no login) | If set, the portal asks for HTTP Basic login: any username, this password. `/health` stays open. |
+| `PORT` | `8044` | Port the portal listens on. Keep the container port equal to the host port. |
+| `APP_PASSWORD` | empty (no login) | If set, the portal asks for HTTP Basic login: any username, this password. `/healthz` and the files needed to install the app stay open. |
 | `TZ` | `America/Toronto` | Time zone used for "today" and week boundaries. |
 | `HORIZON_WEEKS` | `12` | Default planning horizon (changeable in Settings). |
 | `DATA_DIR` | `/data` | Folder for the SQLite database. Mount a volume here. |
@@ -61,9 +62,10 @@ DATA_DIR=./data uvicorn app.main:app --reload
 
 ## Release process (GitHub to Docker Hub)
 
-1. Create the GitHub repository and push this project to `main`.
-2. In the repository settings add secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub access token with write access).
-3. Every build increments the number in the `VERSION` file (0.1, 0.2, 0.3, ...).
-4. Pushing to `main` runs `.github/workflows/docker-publish.yml`: it runs the tests, builds the image, pushes `USER/mealkit-manager:<version>` and `:latest` to Docker Hub, and tags the commit `v<version>`. It fails if that version tag already exists, so a forgotten version bump is caught. Pushes that only change `docs/` or `*.md` files do not trigger a release.
+1. Requests are logged in `docs/pending-changes.md` and built only on a build message.
+2. A release updates `VERSION` (MAJOR.MINOR.PATCH), adds the newest entry to `CHANGELOG.md` with a short text (50 characters or fewer) and a long text (250 or fewer), and refreshes `deploy/compose.yaml`, `deploy/.env.example` and `deploy/RELEASE.md`. The commit uses the same short and long text.
+3. Push `main`, then push the tag: `git tag -a vX.Y.Z -m "<short>" -m "<long>"` and `git push origin vX.Y.Z`.
+4. The tag runs `.github/workflows/release.yml`: it checks version, tag and changelog agree, builds the image, pushes `mybadreligon/mealkit-manager:X.Y.Z`, `X.Y` and `latest`, and creates the GitHub release. It needs the repository secrets `DOCKERHUB_USERNAME` (`mybadreligon`) and `DOCKERHUB_TOKEN`.
+5. `.github/workflows/test.yml` runs the tests on pushes to `main`; it builds nothing.
 
-Suggested commit messages for each build are in `CHANGELOG.md`.
+Suggested commit messages for each release are in `CHANGELOG.md`; the history before v0.4.0 is in `docs/CHANGELOG-early.md`.

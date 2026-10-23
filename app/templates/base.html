@@ -2,22 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161a17" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Plans continuous discounted meal-kit delivery across several accounts.">
   <title>{% block title %}Meal Kit Manager{% endblock %} · Meal Kit Manager</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
 </head>
 <body>
-<header>
-  <a class="brand" href="/">Meal Kit Manager</a>
-  <nav>
-    <a href="/">Week plan</a>
-    <a href="/actions">Actions</a>
-    <a href="/accounts">Accounts</a>
-    <a href="/promos">Promo codes</a>
-    <a href="/settings">Settings</a>
-  </nav>
-</header>
-<main>
+{% set path = request.url.path if request is defined else "/" %}
+{% set nav = [("/", "Week plan", "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4"),
+              ("/actions", "Actions", "M9 6h12M9 12h12M9 18h12M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"),
+              ("/accounts", "Accounts", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"),
+              ("/promos", "Promo codes", "M3 12l9-9h9v9l-9 9zM16 8h.01"),
+              ("/settings", "Settings", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.7a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.7a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z")] %}
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar"><a class="brand" href="/">Meal Kit Manager</a></header>
+<nav class="nav" aria-label="Main">
+  <a class="brand navbrand" href="/">Meal Kit Manager</a>
+  {% for href, label, icon in nav %}
+  <a href="{{ href }}"{% if (href == "/" and path == "/") or (href != "/" and path.startswith(href)) %} class="active" aria-current="page"{% endif %}>
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ icon }}"/></svg>
+    <span>{{ label }}</span>
+  </a>
+  {% endfor %}
+</nav>
+<div id="update-banner" class="banner" role="status" hidden>
+  A new version is ready. <button id="update-reload" type="button">Reload</button>
+</div>
+<main id="main">
 {% if flash %}<p class="notice">{{ flash }}</p>{% endif %}
 {% block content %}{% endblock %}
 </main>

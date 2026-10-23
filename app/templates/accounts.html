@@ -54,7 +54,7 @@
   {% if r["link_state"] != "unlinked" %}
   <div class="row">
     <form method="post" action="/accounts/{{ r['id'] }}/sync" class="inline"><button class="secondary button">Sync now</button></form>
-    <form method="post" action="/accounts/{{ r['id'] }}/unlink" class="inline" onsubmit="return confirm('Delete the stored login for this account?')"><button class="danger">Unlink and delete login</button></form>
+    <form method="post" action="/accounts/{{ r['id'] }}/unlink" class="inline" data-confirm="Delete the stored login for this account?"><button class="danger">Unlink and delete login</button></form>
   </div>
   {% endif %}
   <details{% if r["link_state"] != "linked" %} open{% endif %}>
@@ -74,7 +74,7 @@
   <h3>Discount windows</h3>
   {% set wl = wins_by_acct.get(r["id"], []) %}
   {% if wl %}
-  <table>
+  <div class="scroll"><table>
     <thead><tr><th>Label</th><th>Starts</th><th>Weeks</th><th>Left</th><th>Ends</th><th></th></tr></thead>
     <tbody>
     {% for w in wl %}
@@ -89,7 +89,7 @@
       </tr>
     {% endfor %}
     </tbody>
-  </table>
+  </table></div>
   {% else %}<p>No discount windows. Apply a promo code, or add one by hand.</p>{% endif %}
 
   <details>
@@ -104,7 +104,7 @@
     </form>
   </details>
 
-  <form method="post" action="/accounts/{{ r['id'] }}/delete" onsubmit="return confirm('Delete this account and its history?')">
+  <form method="post" action="/accounts/{{ r['id'] }}/delete" data-confirm="Delete this account and its history?">
     <button class="danger">Delete account</button>
   </form>
 </section>
