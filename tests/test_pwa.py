@@ -132,3 +132,16 @@ def test_schema_version_and_backup_on_upgrade(tmp_path, monkeypatch):
     con.close()
     db.init()                                                                  # second start: no new backup
     assert len(list((tmp_path / "backups").glob("*.db"))) == 1
+
+
+def test_healthcheck_contract_in_image_and_compose():
+    """Image and compose call the same endpoint on $PORT, with a 30 second start period."""
+    d = (ROOT / "Dockerfile").read_text()
+    c = (ROOT / "deploy" / "compose.yaml").read_text()
+    assert "--start-period=30s" in d and "start_period: 30s" in c
+    assert 'http://127.0.0.1:${PORT}/healthz' in d and 'http://127.0.0.1:$${PORT}/healthz' in c
+    main = (ROOT / "app" / "main.py").read_text()
+    assert '"/healthz"' in main and '"/healthz"' in main[main.index("PUBLIC_PATHS"):main.index("PUBLIC_PATHS") + 200]
+    block = main[main.index("def healthz"):main.index("# ---------- PWA files")]
+    assert "http" not in block.lower().replace("httpexception", "") and "requests" not in block     # no outside calls
+    assert '{"status": "ok", "version": config.version()}' in block

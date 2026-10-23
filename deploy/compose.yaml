@@ -1,6 +1,6 @@
 services:
   mealkit-manager:
-    image: mybadreligon/mealkit-manager:0.4.0
+    image: mybadreligon/mealkit-manager:0.4.1
     container_name: mealkit-manager
     restart: unless-stopped
     user: "1000:100"                         # the image runs as 1000:100; PUID/PGID are not used
@@ -21,7 +21,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 30s
     stop_grace_period: 15s
     mem_limit: 1g                            # Chromium runs during account syncs
     cpus: 1.5

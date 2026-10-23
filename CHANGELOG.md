@@ -2,6 +2,13 @@
 
 Newest first, one entry per released version. Each entry carries the exact short (50 characters or fewer) and long (250 characters or fewer) commit text. Releases are built by pushing a tag `vMAJOR.MINOR.PATCH`.
 
+## v0.4.1 - 2026-10-22
+**Short:** Set 30s healthcheck start period
+**Long:** Healthcheck start period is now 30 seconds in the image and compose. /healthz is unchanged and now fixed by tests: public, returns only status and version, checks only the local database. Image tag 0.4.1.
+
+- P-3: the image HEALTHCHECK and the compose healthcheck both call `GET /healthz` on `127.0.0.1:$PORT` with a 30 second start period (was 20).
+- `/healthz` itself did not change. It needs no login, returns only `{"status":"ok","version":"<image tag>"}`, and checks only the local database. Tests now fix this.
+
 ## v0.4.0 - 2026-10-22
 **Short:** Adopt home server release flow, PWA, port 8044
 **Long:** Tag-triggered build pushes mybadreligon/mealkit-manager X.Y.Z, X.Y, latest, then a GitHub release. Adds installable PWA with phone and desktop layouts, /healthz, tini, port 8044, deploy files and an Update field.

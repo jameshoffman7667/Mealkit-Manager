@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 from datetime import date, timedelta
 
 import pytest
@@ -186,6 +187,8 @@ def test_cannot_go_live_before_a_successful_sync(client):
 def test_healthz_and_pwa_routes(client):
     r = client.get("/healthz")
     assert r.status_code == 200 and r.json() == {"status": "ok", "version": config.version()}
+    assert list(r.json()) == ["status", "version"] and r.headers["content-type"].startswith("application/json")
+    assert config.version() == (Path(config.__file__).resolve().parent.parent / "VERSION").read_text().strip()
     m = client.get("/manifest.webmanifest")
     assert m.status_code == 200 and m.headers["content-type"].startswith("application/manifest+json")
     assert m.json()["start_url"] == "/" and m.headers["cache-control"] == "no-cache"
@@ -198,6 +201,14 @@ def test_healthz_and_pwa_routes(client):
     assert "offline" in client.get("/offline").text.lower()
     page = client.get("/")
     assert 'rel="manifest"' in page.text and "/static/app.js" in page.text and 'class="nav"' in page.text
+
+
+def test_healthz_has_no_private_data_and_needs_no_login(client, monkeypatch):
+    add_account(client, "Private nickname")
+    monkeypatch.setenv("APP_PASSWORD", "s3cret")
+    r = client.get("/healthz")                       # no credentials
+    assert r.status_code == 200 and set(r.json()) == {"status", "version"}
+    assert "Private nickname" not in r.text
 
 
 def test_pwa_files_stay_public_behind_the_password(client, monkeypatch):

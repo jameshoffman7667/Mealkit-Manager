@@ -242,7 +242,7 @@ Each service connector implements the same interface: sign in, read status, read
 
 - The app ships as one Docker image that serves the web portal and the scheduler from a single container, listening on port 8044 (set by `PORT`; container port = host port). Earlier builds used 8000 (v0.1, v0.2) and 3800 (v0.3).
 - Configuration through environment variables (`PORT`, `APP_PASSWORD`, `SECRET_KEY`, `HORIZON_WEEKS`, `SYNC_HOURS`, `AUTOMATION`, `TZ`, `DATA_DIR`, `CONNECTOR_DEBUG`); data kept on a mounted volume `/data`.
-- `GET /healthz` returns `{status, version}` when the database answers (503 otherwise); `/health` is kept for older monitors. Both are public.
+- `GET /healthz` on `$PORT` returns exactly `{"status":"ok","version":"<image tag>"}` when the local database answers (503 `{"status":"error",...}` otherwise). It needs no login, shows no account data and calls no outside service. `/health` is kept for older monitors. Both are public. The image `HEALTHCHECK` and the compose healthcheck call it on `127.0.0.1:$PORT` with a 30 second start period.
 - The image runs as 1000:100 under `tini`, stops within a few seconds on SIGTERM, and includes Tesseract and Chromium (large image).
 - The database has a `schema_version` table. Before an upgrade changes an older database, a copy is written to `/data/backups/pre-migrate-<from>-to-<to>-<time>.db`. Upgrades never delete data.
 - Settings > Download all data returns every table as JSON, without stored logins (`/export.json`).
@@ -313,6 +313,10 @@ Each service connector implements the same interface: sign in, read status, read
 | Notifications | Not built | The in-app action queue only. |
 | Packaging and release | Built | Section 10.1 to 10.4: Docker image, GitHub Actions to Docker Hub, VERSION file. |
 | Security | Minimal | Optional shared password. No 2FA. No credentials are stored because accounts are not linked. |
+
+### v0.4.1 (built 2026-10-22): healthcheck start period
+
+Start period 30 seconds in the image and compose; `/healthz` contract fixed by tests (section 10.1).
 
 ### v0.4.0 (built 2026-10-22): release flow, port 8044 and PWA
 

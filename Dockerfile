@@ -31,7 +31,7 @@ USER 1000:100
 VOLUME /data
 EXPOSE 8044
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
