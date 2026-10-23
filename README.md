@@ -62,10 +62,12 @@ DATA_DIR=./data uvicorn app.main:app --reload
 
 ## Release process (GitHub to Docker Hub)
 
+A release is a commit and a push to `main`. No tag is pushed by hand.
+
 1. Requests are logged in `docs/pending-changes.md` and built only on a build message.
-2. A release updates `VERSION` (MAJOR.MINOR.PATCH), adds the newest entry to `CHANGELOG.md` with a short text (50 characters or fewer) and a long text (250 or fewer), and refreshes `deploy/compose.yaml`, `deploy/.env.example` and `deploy/RELEASE.md`. The commit uses the same short and long text.
-3. Push `main`, then push the tag: `git tag -a vX.Y.Z -m "<short>" -m "<long>"` and `git push origin vX.Y.Z`.
-4. The tag runs `.github/workflows/release.yml`: it checks version, tag and changelog agree, builds the image, pushes `mybadreligon/mealkit-manager:X.Y.Z`, `X.Y` and `latest`, and creates the GitHub release. It needs the repository secrets `DOCKERHUB_USERNAME` (`mybadreligon`) and `DOCKERHUB_TOKEN`.
-5. `.github/workflows/test.yml` runs the tests on pushes to `main`; it builds nothing.
+2. Change `VERSION` (MAJOR.MINOR.PATCH), add the newest entry to `CHANGELOG.md` with a short text (50 characters or fewer) and a long text (250 or fewer), and refresh `deploy/compose.yaml` (pinned to the new version), `deploy/.env.example` and `deploy/RELEASE.md`. Commit with the same short and long text and push `main`.
+3. The push runs `.github/workflows/release.yml` because `VERSION` changed. It fails if the tag `vX.Y.Z` or a GitHub release for it already exists, or if the `CHANGELOG.md` entry is missing or too long. Otherwise it runs the tests, builds the image, pushes `mybadreligon/mealkit-manager:X.Y.Z`, `X.Y` and `latest`, and creates the GitHub release with `gh release create vX.Y.Z --target $GITHUB_SHA`, which also creates the tag. It needs the repository secrets `DOCKERHUB_USERNAME` (`mybadreligon`) and `DOCKERHUB_TOKEN`.
+4. Pushes to `main` that do not change `VERSION` build nothing; `.github/workflows/test.yml` runs the tests.
+5. Fallback: pushing a tag `vX.Y.Z` by hand runs the same workflow with the same checks. The two ways cannot release the same version twice.
 
 Suggested commit messages for each release are in `CHANGELOG.md`; the history before v0.4.0 is in `docs/CHANGELOG-early.md`.

@@ -261,8 +261,9 @@ Each service connector implements the same interface: sign in, read status, read
 ### 10.3 Source control and automated publishing
 
 - The project lives in the GitHub repository `jameshoffman7667/Mealkit-Manager`; `main` is the default branch.
-- Pushing a tag `vMAJOR.MINOR.PATCH` runs `.github/workflows/release.yml`: it checks that `VERSION`, the tag and the `CHANGELOG.md` entry agree (short text 50 characters or fewer, long text 250 or fewer), builds `linux/amd64`, pushes `mybadreligon/mealkit-manager:X.Y.Z`, `X.Y` and `latest` to Docker Hub, and creates the GitHub release as its last step.
-- Plain pushes to `main` build nothing; `.github/workflows/test.yml` runs the tests.
+- A release is a commit and push to `main` that changes `VERSION`; no tag is pushed by hand. `.github/workflows/release.yml` reads X.Y.Z from `VERSION`, fails if tag `vX.Y.Z` or a GitHub release for it already exists or the `CHANGELOG.md` entry is missing or invalid (short text 50 characters or fewer, long text 250 or fewer), runs the tests, builds `linux/amd64`, pushes `mybadreligon/mealkit-manager:X.Y.Z`, `X.Y` and `latest` to Docker Hub, and creates the GitHub release with `gh release create vX.Y.Z --target $GITHUB_SHA`, which also creates the tag, as its last step. It uses the workflow's own token (`contents: write`).
+- Pushing a tag `vMAJOR.MINOR.PATCH` by hand still runs the same workflow as a manual fallback. Both ways share one concurrency group per version and the same existence checks, so a version is released once.
+- Pushes to `main` that do not change `VERSION` build nothing; `.github/workflows/test.yml` runs the tests.
 - Docker Hub credentials are repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, never in the code.
 - Each release leaves `deploy/compose.yaml` (image pinned to the version), `deploy/.env.example` and `deploy/RELEASE.md` (what the deploy needs for that version). `RELEASE.md` has a fixed `Update:` line: `Update: now` only when the build message for that release was "build, push and update", otherwise `Update: later`.
 
@@ -314,7 +315,11 @@ Each service connector implements the same interface: sign in, read status, read
 | Packaging and release | Built | Section 10.1 to 10.4: Docker image, GitHub Actions to Docker Hub, VERSION file. |
 | Security | Minimal | Optional shared password. No 2FA. No credentials are stored because accounts are not linked. |
 
-### v0.4.1 (built 2026-10-22): healthcheck start period
+### v0.4.2 (built 2026-10-22): release on a VERSION push
+
+Release workflow triggered by a changed `VERSION` on `main` (section 10.3). The first run of this workflow is the release of v0.4.2 itself.
+
+### v0.4.1 (built 2026-10-22, never published on its own): healthcheck start period
 
 Start period 30 seconds in the image and compose; `/healthz` contract fixed by tests (section 10.1).
 

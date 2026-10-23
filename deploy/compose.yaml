@@ -1,6 +1,6 @@
 services:
   mealkit-manager:
-    image: mybadreligon/mealkit-manager:0.4.1
+    image: mybadreligon/mealkit-manager:0.4.2
     container_name: mealkit-manager
     restart: unless-stopped
     user: "1000:100"                         # the image runs as 1000:100; PUID/PGID are not used

@@ -101,12 +101,20 @@ def test_release_notes_have_the_update_field():
     assert "Docker build:" in r and "Release commit:" in r
 
 
-def test_release_workflow_is_the_standard_one():
+def test_release_workflow_releases_on_a_version_push_without_a_tag_push():
     w = (ROOT / ".github" / "workflows" / "release.yml").read_text()
-    assert 'tags: ["v*.*.*"]' in w and "branches" not in w
-    assert "mybadreligon/mealkit-manager" in w and "type=raw,value=latest" in w
-    assert "{{major}}.{{minor}}" in w and "linux/amd64" in w
+    assert "branches: [main]" in w and 'tags: ["v*.*.*"]' in w            # main push, tag only as a fallback
+    assert "permissions:\n  contents: write" in w
+    assert "VERSION|package" in w and "BEFORE" in w                        # only when the version file changed
+    assert "refs/tags/v$VERSION" in w and "gh release view" in w           # refuses an existing tag or release
+    assert "CHANGELOG.md has no entry" in w and "max 50" in w and "max 250" in w
+    assert "concurrency:" in w and "group: release-${{ needs.plan.outputs.version }}" in w
+    assert "type=raw,value=${{ needs.plan.outputs.version }}" in w and "type=raw,value=latest" in w
+    assert "type=semver" not in w                                          # semver tags need a tag push
+    assert "mybadreligon/mealkit-manager" in w and "linux/amd64" in w
+    assert 'gh release create "v$VERSION" --target "$GITHUB_SHA"' in w
     assert w.rindex("gh release create") > w.rindex("build-push-action")      # release is the last step
+    assert "needs: [plan, test]" in w                                         # tests gate the image
     assert not (ROOT / ".github" / "workflows" / "docker-publish.yml").exists()
     t = (ROOT / ".github" / "workflows" / "test.yml").read_text()
     assert "push: true" not in t and "docker/login" not in t

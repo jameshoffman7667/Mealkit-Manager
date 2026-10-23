@@ -2,6 +2,14 @@
 
 Newest first, one entry per released version. Each entry carries the exact short (50 characters or fewer) and long (250 characters or fewer) commit text. Releases are built by pushing a tag `vMAJOR.MINOR.PATCH`.
 
+## v0.4.2 - 2026-10-22
+**Short:** Release on VERSION push, no tag push needed
+**Long:** Pushing a changed VERSION to main now runs the release: checks, tests, image X.Y.Z, X.Y and latest, then gh release create makes the tag. Tag trigger stays as manual fallback. Guards stop double releases. Image tag 0.4.2.
+
+- P-4: a release is now a commit and push to `main` that changes `VERSION`. The release workflow reads X.Y.Z from `VERSION`, fails if the tag `vX.Y.Z` or a release for it exists or the CHANGELOG entry is missing or invalid, runs the tests, pushes `mybadreligon/mealkit-manager` X.Y.Z, X.Y and latest, then runs `gh release create vX.Y.Z --target $GITHUB_SHA`, which creates the tag.
+- Pushing a `v*.*.*` tag still works as a manual fallback. Both ways share one concurrency group per version and the same existence checks, so a version is released once.
+- v0.4.1 (30 second start period) was never tagged or published on its own; it is included in this release.
+
 ## v0.4.1 - 2026-10-22
 **Short:** Set 30s healthcheck start period
 **Long:** Healthcheck start period is now 30 seconds in the image and compose. /healthz is unchanged and now fixed by tests: public, returns only status and version, checks only the local database. Image tag 0.4.1.

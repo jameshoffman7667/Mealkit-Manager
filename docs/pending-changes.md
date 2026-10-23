@@ -35,3 +35,9 @@ Notes / questions:
 - To change: start period 20s -> 30s in the Dockerfile and deploy/compose.yaml; add tests that fix the contract (exact JSON keys, no auth, version equals VERSION, start period 30s in both files).
 - Decision: kept. If the database cannot be read, /healthz returns 503 and the container shows unhealthy.
 - Working rule noted (not a build item): no zip delivery from now on; releases are pushed to GitHub only.
+
+### P-4 - Release without a tag push
+Requested: 2026-10-22 (James: "If the tag pushes are failing, change the release workflow so it never needs a tag push ... build and push this change")
+Type: patch (release pipeline)        Status: Built in v0.4.2
+Notes: trigger is a push to main that changes `VERSION` (this app has no package.json); `gh release create vX.Y.Z --target $GITHUB_SHA` creates the tag; the `v*.*.*` tag trigger stays as a manual fallback; both share a concurrency group per version and refuse an existing tag or release.
+

@@ -1,6 +1,6 @@
 /* Service worker. Caches only the app shell. It never stores API responses, sign-in pages or any
    page that shows account data: navigations always go to the network and fall back to /offline. */
-const VERSION = "0.4.1";
+const VERSION = "0.4.2";
 const CACHE = "mealkit-manager-v" + VERSION;
 const SHELL = [
   "/offline",
