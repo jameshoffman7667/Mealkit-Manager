@@ -15,6 +15,14 @@ Decisions (James, 2026-10-22):
 - Docker Hub image name `mybadreligon/mealkit-manager` (lowercase, hard-coded in the workflow).
 Notes: the build runs only after a build message.
 
+### P-2 - Add a fixed "Update:" field to deploy/RELEASE.md
+Requested: 2026-10-22 (James: "In deploy/RELEASE.md, add a fixed field Update: now or Update: later. Write Update: now only when I say 'build, push and update' for this release; otherwise write Update: later.")
+Type: patch (release note format)        Status: Pending
+Notes / questions:
+- Rule as I understand it: `Update: now` only if the build message for that release is "build, push and update"; any other build message (for example "build P-1", "build it", "release it") gives `Update: later`. Decided per release, not remembered from the previous one. Applies to every release of this app, starting with the one that builds this entry.
+- Planned for the same release as P-1, so v0.4.0's RELEASE.md carries the field. The field sits on its own line near the top, after the Image line.
+- Open: should `Update: now` also change anything else in the report (for example mark the Claude Code prompt as ready to run), or is it only a label in RELEASE.md? I will treat it as a label only unless you say otherwise.
+
 ## Done
 
 (none yet)
