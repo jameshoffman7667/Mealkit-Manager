@@ -333,7 +333,7 @@ AI usage: none. Photo capture reads promo codes with local Tesseract OCR on the 
 
 ### v0.5.0 (built 2026-11-13): Android app
 
-Section 10.9. TWA files, assetlinks route, android release job, tests. APK untested on a phone.
+Section 10.10. TWA files, assetlinks route, android release job, tests. APK untested on a phone.
 
 ### v0.4.2 (built 2026-10-22): release on a VERSION push
 
