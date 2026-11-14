@@ -4,17 +4,31 @@
 # Pushing a tag vX.Y.Z by hand still works as a fallback (same checks, same steps). Both ways share one
 # concurrency group per version and refuse a version that already has a release or tag, so a version
 # can only be released once. Tags and releases made with the workflow token do not start another run.
+# The android job (spec v1.11 section 15) runs after image, builds and signs mealkit-manager-X.Y.Z.apk and
+# attaches it to the release; it skips with a green notice until the four ANDROID_* secrets exist. A manual
+# run (workflow_dispatch with tag and overwrite) rebuilds only the APK of an existing release.
 name: release
 on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
+  # Android only (spec v1.11 section 15): rebuild the APK of an existing release. Never touches the image or the tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag whose APK to (re)build, e.g. v1.2.3"
+        required: true
+      overwrite:
+        description: "Replace an APK that is already attached to that release"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   plan:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.plan.outputs.release }}
@@ -80,7 +94,7 @@ jobs:
 
   test:
     needs: plan
-    if: needs.plan.outputs.release == 'true'
+    if: github.event_name != 'workflow_dispatch' && needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +110,7 @@ jobs:
 
   image:
     needs: [plan, test]
-    if: needs.plan.outputs.release == 'true'
+    if: github.event_name != 'workflow_dispatch' && needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
     # one release per version at a time, whichever way it was started
     concurrency:
@@ -153,3 +167,152 @@ jobs:
 
       - name: GitHub release (also creates the tag)
         run: gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION - $SHORT" --notes-file <(awk -v v="## v$VERSION " 'index($0,v)==1{f=1;next} f&&/^## v/{exit} f' CHANGELOG.md)
+
+  android:
+    needs: [plan, image]
+    # Normal release: after plan and image succeeded. Manual run: always (plan, test and image are skipped).
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (needs.plan.outputs.release == 'true' && needs.image.result == 'success')) }}
+    runs-on: ubuntu-latest
+    env:
+      APP: mealkit-manager
+      ASSETLINKS_PATH: app/static/assetlinks.json   # where this app keeps its assetlinks.json source file
+      GH_TOKEN: ${{ github.token }}
+      OVERWRITE: ${{ github.event_name == 'workflow_dispatch' && inputs.overwrite || 'false' }}
+    steps:
+      - name: Work out the version and tag
+        id: ver
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_TAG"
+            [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag '$TAG' is not vX.Y.Z"; exit 1; }
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null || { echo "::error::no GitHub release $TAG"; exit 1; }
+            VERSION="${TAG#v}"
+          else
+            VERSION="$RELEASE_VERSION"; TAG="v$VERSION"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"; echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ver.outputs.tag }}
+
+      # Skips (green, with a notice) until the repo has twa-manifest.json and James has added the four
+      # ANDROID_* secrets, so a release never fails only because the key does not exist yet. The notice names
+      # every secret that is missing.
+      - name: Check the Android build is set up
+        id: gate
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ ! -f twa-manifest.json ]; then echo "::notice::No twa-manifest.json: Android build skipped"; echo "build=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          missing=""
+          for v in KEYSTORE_B64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            [ -n "${!v}" ] || missing="$missing ANDROID_$v"
+          done
+          if [ -n "$missing" ]; then echo "::notice::Missing secrets:$missing. Android build skipped"; echo "build=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        if: steps.gate.outputs.build == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.build == 'true'
+        with:
+          node-version: "20"
+
+      - name: Build and sign the APK
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          VERSION_CODE="$(node scripts/android-version.js "$VERSION")"
+          echo "versionName=$VERSION versionCode=$VERSION_CODE"
+          npm install -g @bubblewrap/cli@1
+          printf %s "$KEYSTORE_B64" | base64 -d > android.keystore
+          # NEW: the signing certificate must be the one assetlinks.json names, or the TWA opens with an address bar.
+          FP="$(keytool -list -v -keystore android.keystore -alias "$KEY_ALIAS" -storepass:env BUBBLEWRAP_KEYSTORE_PASSWORD | awk '/SHA256:/ {print $2; exit}')"
+          [ -n "$FP" ] || { echo "::error::could not read the signing certificate fingerprint"; exit 1; }
+          grep -qi "$FP" "$ASSETLINKS_PATH" || { echo "::error::$ASSETLINKS_PATH does not list the signing certificate fingerprint ($FP). Fix assetlinks.json (the fingerprint is public) and re-run."; exit 1; }
+          # point Bubblewrap at the runner's JDK and Android SDK so it does not ask to download them
+          mkdir -p "$HOME/.bubblewrap"
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
+          # Bubblewrap only accepts an SDK folder that has a "tools" or "bin" folder at its root and needs
+          # build-tools 36.1.0, so create the folder and install the pieces with the runner's sdkmanager.
+          sudo chmod -R a+rwX "$ANDROID_HOME" || true
+          mkdir -p "$ANDROID_HOME/tools"
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+          "$SDKM" "platform-tools" "build-tools;36.1.0" "platforms;android-36" >/dev/null
+          node -e '
+            const fs=require("fs"); const m=JSON.parse(fs.readFileSync("twa-manifest.json","utf8"));
+            m.appVersion=process.env.VERSION; m.appVersionCode=Number(process.argv[1]); delete m.appVersionName;
+            m.signingKey={path:"./android.keystore",alias:process.env.KEY_ALIAS};
+            fs.writeFileSync("twa-manifest.json",JSON.stringify(m,null,2));
+          ' "$VERSION_CODE"
+          # generate the Android project from twa-manifest.json (also writes manifest-checksum.txt) without prompting
+          bubblewrap update --skipVersionUpgrade < /dev/null
+          # Kept from the pilot: shrinking off. It was first blamed for the launch crash but the real cause was
+          # enableSiteSettingsShortcut being false; this is harmless (APK slightly larger) and is the configuration
+          # that is known to work, so leave it.
+          sed -i 's/minifyEnabled true/minifyEnabled false/' app/build.gradle
+          grep -q 'minifyEnabled false' app/build.gradle
+          bubblewrap build --skipPwaValidation < /dev/null
+          mv app-release-signed.apk "$APP-$VERSION.apk"
+          rm -f android.keystore
+
+      # NEW: read the finished APK back before it is published (package id, versionCode, minSdk, signing).
+      - name: Inspect the APK
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          pip install -q androguard
+          python3 - "$APP-$VERSION.apk" <<'PY'
+          import json, sys
+          from androguard.core.apk import APK
+          a = APK(sys.argv[1]); t = json.load(open("twa-manifest.json"))
+          print("package", a.get_package(), "versionName", a.get_androidversion_name(), "versionCode", a.get_androidversion_code(), "minSdk", a.get_min_sdk_version())
+          assert a.get_package() == t["packageId"], "package id differs from twa-manifest.json"
+          assert a.is_signed(), "APK is not signed"
+          assert int(a.get_min_sdk_version()) >= 24, "minSdk below 24"
+          PY
+
+      - name: Attach the APK to the GitHub release
+        if: steps.gate.outputs.build == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          APK="$APP-$VERSION.apk"
+          # NEW overwrite guard: the F-Droid updater may already have downloaded an APK with this name.
+          if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$APK"; then
+            if [ "$OVERWRITE" != "true" ]; then
+              echo "::error::$APK is already attached to $TAG. Re-run with overwrite=true only if the APK was never installed or downloaded (same versionCode)."
+              exit 1
+            fi
+            echo "::warning::Replacing $APK on $TAG (overwrite=true)"
+          fi
+          gh release upload "$TAG" "$APK" --clobber

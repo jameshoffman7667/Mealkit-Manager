@@ -295,8 +295,20 @@ Each service connector implements the same interface: sign in, read status, read
 - Installable on phone and desktop (needs the https address; a plain LAN address is not installable). `manifest.webmanifest` (standalone, theme colours, 192, 512 and maskable 512 icons, wide and narrow screenshots), an Apple touch icon, and Install app in Settings (with iPhone instructions).
 - The service worker (`/sw.js`, scope `/`) precaches only the app shell and the offline page. Pages and data are never cached; page loads go to the network, and the offline page is shown only when the server cannot be reached.
 - A new version shows "A new version is ready. Reload"; it never takes over silently, and the first install does not reload the page. Old caches are deleted when a new worker activates. The cache name carries the app version.
-- With `APP_PASSWORD` set, these stay public so installation works: `/healthz`, `/health`, `/manifest.webmanifest`, `/sw.js`, `/offline`, `/icons/*`, `/static/*`. Behind Cloudflare Access the same paths need a bypass policy.
+- With `APP_PASSWORD` set, these stay public so installation works: `/healthz`, `/health`, `/manifest.webmanifest`, `/sw.js`, `/offline`, `/icons/*`, `/static/*`, `/.well-known/assetlinks.json`. Behind Cloudflare Access the same paths need a bypass policy.
 - Light and dark colour schemes follow the device setting.
+
+### 10.9 Android app (TWA, spec v1.11 section 15)
+
+- A thin Trusted Web Activity (Bubblewrap) that opens `https://mealkit.hoffmanhouse.ca` full screen. Same PWA, no second codebase. The PWA stays the fallback.
+- Package id `ca.hoffmanhouse.mealkit` (never changes). Host `mealkit.hoffmanhouse.ca`. Signing key alias `mealkit`; the key and passwords live only in the four GitHub secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` and in James's backups. The workflow never produces a debug-signed APK; with a secret missing the android job skips green and names the missing secrets.
+- versionName = release version; versionCode = MAJOR*100000000 + MINOR*10000 + PATCH (0.5.0 gives 50000); the build fails above MINOR/PATCH 9999 or MAJOR 20 (`scripts/android-version.js`; a Python copy in `tests/test_android.py` is checked against it).
+- APK name `mealkit-manager-<version>.apk`, attached to the `vX.Y.Z` GitHub release. The F-Droid updater polls the releases every 15 minutes.
+- Digital Asset Links: `app/static/assetlinks.json`, served at `/.well-known/assetlinks.json` (public, `application/json`, no redirect, also with an app password set). It lists package `ca.hoffmanhouse.mealkit` and the signing certificate fingerprint `72:C6:F8:1F:...:A1:9A:FB:8E`. The build fails if the certificate it signs with is not listed. Status: committed in v0.5.0; served once 0.5.0 is deployed and Cloudflare Access lets the path through.
+- Rebuild an APK without a release (only a failed or wrong APK nobody installed): `gh api -X POST repos/jameshoffman7667/Mealkit-Manager/actions/workflows/release.yml/dispatches -f ref=main -f 'inputs[tag]=vX.Y.Z' -f 'inputs[overwrite]=false'`, or Actions > release > Run workflow. The versionCode does not change on a rebuild.
+- Back button: every screen is a real page with its own history entry, forms post and redirect (303), the confirmation prompts are the browser's own `confirm()` and the `<details>` sections open in place, so Android Back steps back. The only fix needed was the photo-scan error, which was drawn straight from the POST; it now redirects to `/promos/scan?error=...`. The scan review page is still drawn from the POST, so returning to it through history asks to resend the photo and fails harmlessly; the user scans again. Back on the week plan (the start page) closes the app, as expected.
+- Notifications: none. The app has no Web Push, so `enableNotifications` is false.
+- Known limits: the first APK is untested until James confirms it on his phone; the Android build ran only in CI; the rebuild input, overwrite guard, fingerprint check and APK inspection are new in the template and untested until the first run; Cloudflare Access must let `/.well-known/assetlinks.json` through or the app opens with an address bar.
 
 ## 11. Implementation status
 
@@ -314,6 +326,10 @@ Each service connector implements the same interface: sign in, read status, read
 | Notifications | Not built | The in-app action queue only. |
 | Packaging and release | Built | Section 10.1 to 10.4: Docker image, GitHub Actions to Docker Hub, VERSION file. |
 | Security | Minimal | Optional shared password. No 2FA. No credentials are stored because accounts are not linked. |
+
+### v0.5.0 (built 2026-11-13): Android app
+
+Section 10.9. TWA files, assetlinks route, android release job, tests. APK untested on a phone.
 
 ### v0.4.2 (built 2026-10-22): release on a VERSION push
 

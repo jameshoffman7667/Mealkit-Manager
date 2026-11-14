@@ -2,6 +2,16 @@
 
 Newest first, one entry per released version. Each entry carries the exact short (50 characters or fewer) and long (250 characters or fewer) commit text. Releases are built by pushing a tag `vMAJOR.MINOR.PATCH`.
 
+## v0.5.0 - 2026-11-13
+**Short:** Add Android app (TWA) APK for F-Droid repo
+**Long:** Adds the Android app (TWA, ca.hoffmanhouse.mealkit): twa-manifest, assetlinks.json route, android release job that signs and attaches the APK, rebuild input. Scan errors now redirect. APK untested until confirmed. Image 0.5.0.
+
+- Android app (spec v1.11 section 15): Trusted Web Activity for `https://mealkit.hoffmanhouse.ca`, package `ca.hoffmanhouse.mealkit`, key alias `mealkit`, APK `mealkit-manager-X.Y.Z.apk` attached to each GitHub release for the F-Droid updater. `twa-manifest.json` and `scripts/android-version.js` come from the template; versionCode = MAJOR*100000000 + MINOR*10000 + PATCH (0.5.0 is 50000).
+- `/.well-known/assetlinks.json` is served (public, `application/json`, no redirect, also without the app password). The build fails if the signing certificate is not listed in it.
+- Release workflow: new `android` job after `image` (skips with a green notice listing the missing `ANDROID_*` secrets), a `workflow_dispatch` rebuild input (tag, overwrite), the APK inspection and the overwrite guard. The release logic itself is unchanged.
+- Back button: a failed photo scan now redirects to the scan page instead of drawing it from the POST, so Android Back never asks to resend a photo.
+- The first APK is untested until James confirms it on his phone.
+
 ## v0.4.2 - 2026-10-22
 **Short:** Release on VERSION push, no tag push needed
 **Long:** Pushing a changed VERSION to main now runs the release: checks, tests, image X.Y.Z, X.Y and latest, then gh release create makes the tag. Tag trigger stays as manual fallback. Guards stop double releases. Image tag 0.4.2.

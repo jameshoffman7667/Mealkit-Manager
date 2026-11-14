@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ca.hoffmanhouse.mealkit",
+      "sha256_cert_fingerprints": [
+        "72:C6:F8:1F:A6:34:32:7F:F1:6A:24:8B:D7:7C:7E:C8:DF:F1:99:4B:7B:B5:DF:46:1F:47:07:03:A1:9A:FB:8E"
+      ]
+    }
+  }
+]

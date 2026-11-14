@@ -47,7 +47,8 @@ templates.env.globals["version"] = config.version
 
 # ---------- auth (optional) ----------
 # Public so the browser can install the app and the server can check it: health, PWA files, static assets.
-PUBLIC_PATHS = {"/health", "/healthz", "/manifest.webmanifest", "/sw.js", "/offline"}
+PUBLIC_PATHS = {"/health", "/healthz", "/manifest.webmanifest", "/sw.js", "/offline",
+                "/.well-known/assetlinks.json"}
 PUBLIC_PREFIXES = ("/static/", "/icons/")
 
 
@@ -100,6 +101,12 @@ def manifest():
 def service_worker():
     return FileResponse(BASE / "static" / "sw.js", media_type="text/javascript",
                         headers={**NO_CACHE, "Service-Worker-Allowed": "/"})
+
+
+@app.get("/.well-known/assetlinks.json")
+def assetlinks():
+    # Digital Asset Links for the Android app (TWA). Public, JSON, served directly with no redirect.
+    return FileResponse(BASE / "static" / "assetlinks.json", media_type="application/json", headers=NO_CACHE)
 
 
 @app.get("/icons/{name}")
@@ -350,9 +357,9 @@ async def promo_scan(request: Request, photo: UploadFile = File(...)):
     try:
         text = ocr.ocr_image(data)
     except ocr.OcrUnavailable as exc:
-        return render(request, "promo_scan.html", st=st, error=f"{exc} Enter the code by hand instead.")
+        return back("/promos/scan?error=" + quote(f"{exc} Enter the code by hand instead."[:300]))
     except ocr.OcrFailed as exc:
-        return render(request, "promo_scan.html", st=st, error=str(exc))
+        return back("/promos/scan?error=" + quote(str(exc)[:300]))
     parsed = ocr.parse_promo_text(text)
     notes, low = [], set()
     if not parsed["code"]:

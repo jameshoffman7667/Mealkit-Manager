@@ -5,3 +5,6 @@ data/
 *.db
 .env
 *.zip
+*.keystore
+*.jks
+*.apk

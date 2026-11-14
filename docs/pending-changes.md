@@ -52,3 +52,8 @@ Requested: 2026-10-22 (James: "If the tag pushes are failing, change the release
 Type: patch (release pipeline)        Status: Built in v0.4.2
 Notes: trigger is a push to main that changes `VERSION` (this app has no package.json); `gh release create vX.Y.Z --target $GITHUB_SHA` creates the tag; the `v*.*.*` tag trigger stays as a manual fallback; both share a concurrency group per version and refuse an existing tag or release.
 
+### P-6 - Android app (TWA) published to the F-Droid repo
+Requested: 2026-11-13 (James: build message with spec v1.11 section 15, android-template-bundle.md)
+Type: minor        Status: Built in v0.5.0
+Notes: package ca.hoffmanhouse.mealkit, host mealkit.hoffmanhouse.ca, alias mealkit. Web Push is not used, so `enableNotifications` is false. assetlinks.json lives in `app/static/` and is served at `/.well-known/assetlinks.json`. Back-button audit result is in docs/functional-spec.md section 10.9. First APK untested until James confirms it on his phone; the F-Droid listing waits for that.
+

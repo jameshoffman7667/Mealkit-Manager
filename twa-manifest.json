@@ -1,0 +1,30 @@
+{
+  "packageId": "ca.hoffmanhouse.mealkit",
+  "host": "mealkit.hoffmanhouse.ca",
+  "name": "Meal Kit Manager",
+  "launcherName": "Meal Kits",
+  "display": "standalone",
+  "orientation": "default",
+  "themeColor": "#2f6f4f",
+  "themeColorDark": "#2f6f4f",
+  "navigationColor": "#2f6f4f",
+  "navigationColorDark": "#2f6f4f",
+  "navigationDividerColor": "#2f6f4f",
+  "navigationDividerColorDark": "#2f6f4f",
+  "backgroundColor": "#f7f6f2",
+  "startUrl": "/",
+  "iconUrl": "https://mealkit.hoffmanhouse.ca/icons/icon-512.png",
+  "maskableIconUrl": "https://mealkit.hoffmanhouse.ca/icons/icon-maskable-512.png",
+  "enableNotifications": false,
+  "enableSiteSettingsShortcut": true,
+  "fallbackType": "customtabs",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "mealkit"
+  },
+  "appVersion": "0.0.0",
+  "generatorApp": "bubblewrap-cli",
+  "appVersionCode": 1,
+  "minSdkVersion": 24
+}
