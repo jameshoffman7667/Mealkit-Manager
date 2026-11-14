@@ -17,6 +17,17 @@ Notes / questions:
 - Decision for the server update (James): start with AUTOMATION=off or on? Both are safe until SECRET_KEY is set and an account is linked and live; nothing else in the app reads it. Not a code change.
 - Should the compose default for AUTOMATION change to `off` in deploy/compose.yaml? (my suggestion: yes, until the connectors are checked on the live sites)
 
+### P-7 - Account logins fail on HelloFresh and Chef's Plate
+Requested: 2026-11-14 (James: "The logins aren't working for HelloFresh, and Chef's Plate says it can't find a login page")
+Type: patch (connector fix; may become minor if a new sign-in flow must be built)        Status: Pending (blocked on details)
+Notes / questions:
+- Expected from the code: the site profiles in `app/connectors/profiles.py` (login path `/login`, email/password/submit selectors) are unverified guesses; the connectors have never run against the live sites. Chef's Plate's message matches "Could not find the sign-in form at <base>/login" (wrong login path, or the form is not an email + password pair on that page). HelloFresh's wording is not known yet.
+- Likely causes: wrong login URL, the sign-in being a two-step form (email first, then password) or opening in a pop-up, a cookie banner covering the form, or a bot check (CAPTCHA) blocking the headless browser. AL-7 says the app never tries to bypass a CAPTCHA or identity check.
+- Needed from James: (1) the exact red message shown for each account (Accounts page, link state or the activity log on Settings); (2) in a normal browser, the address of the sign-in page for each service and whether it asks for email and password together or in two steps, and whether a pop-up, cookie banner or "are you human" check appears; (3) a screenshot of each sign-in page if easy.
+- Optional for diagnosis: set DEBUG_CAPTURE on the server for one run (saves the text of each page the connector reads to /data/debug; it contains personal data, so James reviews it before sharing anything).
+- Interim workaround with no code change: the login path and selectors can be overridden per service in /data/connectors.json once the real values are known (Claude Code can place it).
+- Accounts stay in dry-run, so nothing is changed on the services while this is open.
+
 ## Done
 
 ### P-1 - Switch to the standard home server release flow
