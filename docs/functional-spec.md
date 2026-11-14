@@ -298,7 +298,11 @@ Each service connector implements the same interface: sign in, read status, read
 - With `APP_PASSWORD` set, these stay public so installation works: `/healthz`, `/health`, `/manifest.webmanifest`, `/sw.js`, `/offline`, `/icons/*`, `/static/*`, `/.well-known/assetlinks.json`. Behind Cloudflare Access the same paths need a bypass policy.
 - Light and dark colour schemes follow the device setting.
 
-### 10.9 Android app (TWA, spec v1.11 section 15)
+### 10.9 AI usage
+
+AI usage: none. Photo capture reads promo codes with local Tesseract OCR on the server; no model, provider or outside AI call is used, and there are no `AI_*` settings.
+
+### 10.10 Android app (TWA, spec v1.11 section 15)
 
 - A thin Trusted Web Activity (Bubblewrap) that opens `https://mealkit.hoffmanhouse.ca` full screen. Same PWA, no second codebase. The PWA stays the fallback.
 - Package id `ca.hoffmanhouse.mealkit` (never changes). Host `mealkit.hoffmanhouse.ca`. Signing key alias `mealkit`; the key and passwords live only in the four GitHub secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` and in James's backups. The workflow never produces a debug-signed APK; with a secret missing the android job skips green and names the missing secrets.
