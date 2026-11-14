@@ -331,6 +331,10 @@ AI usage: none. Photo capture reads promo codes with local Tesseract OCR on the 
 | Packaging and release | Built | Section 10.1 to 10.4: Docker image, GitHub Actions to Docker Hub, VERSION file. |
 | Security | Minimal | Optional shared password. No 2FA. No credentials are stored because accounts are not linked. |
 
+### v0.5.1 (built 2026-11-14): sign-in fix
+
+P-7. HelloFresh and Chef's Plate sign-in selectors from the live login pages, Enter fallback, wait after submit, site error text. Plan and delivery pages still unverified.
+
 ### v0.5.0 (built 2026-11-13): Android app
 
 Section 10.10. TWA files, assetlinks route, android release job, tests. APK untested on a phone.
@@ -372,7 +376,7 @@ Connector design note (change log CL-0007): connectors are Python Playwright flo
 | Requirement | v0.3 status | Notes |
 | --- | --- | --- |
 | LK-1 | Built | Fernet encryption, key derived from `SECRET_KEY` (16+ characters). Linking is refused without the key. Unlink deletes the login. Changing the key means entering logins again. |
-| LK-2 | Built, unverified against the live sites | Read status, read weeks, skip, unskip, reactivate, cancel for all three services. Page paths and selectors are starting guesses (HelloFresh and Chef's Plate share one layout assumption; Good Food paths are guesses). Reading discounts from the site is not built. |
+| LK-2 | Built; sign-in checked against the live login pages (v0.5.1), the rest unverified | Sign-in profiles for HelloFresh (`input[name=username]`) and Chef's Plate (`#INPUT_EMAIL`, `#INPUT_PASSWORD`) were read from the live pages on 2026-11-14; the sign-in presses the site's button or Enter, waits up to 12 s for the page to leave the login page, and reports the site's own error text. Read status, read weeks, skip, unskip, reactivate, cancel for all three services. Plan and delivery paths and selectors are starting guesses (HelloFresh and Chef's Plate share one layout assumption; Good Food paths are guesses). Reading discounts from the site is not built. |
 | LK-3 | Built | Verification text (codes, CAPTCHA, check your email) stops the run and sets Needs attention. |
 | LK-4 | Built, differs | Runs every 6 hours (`SYNC_HOURS`), on demand, and before every action. The plan is rebuilt after each read; a box the service shows on a locked week is adopted as committed; other differences are shown on the week plan and as an alert, and a planned box the service shows as skipped is un-skipped in Auto mode. |
 | LK-5 | Built | Auto acts when due (skips 3 days before the cut-off; reactivate and cancel when due). Ask first waits for Approve on the Actions page. Every action is verified; after 3 failed attempts automatic tries stop. No retry delay beyond the next cycle. |

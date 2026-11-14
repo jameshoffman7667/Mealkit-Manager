@@ -2,6 +2,15 @@
 
 Newest first, one entry per released version. Each entry carries the exact short (50 characters or fewer) and long (250 characters or fewer) commit text. Releases are built by pushing a tag `vMAJOR.MINOR.PATCH`.
 
+## v0.5.1 - 2026-11-14
+**Short:** Fix HelloFresh and Chef's Plate sign-in
+**Long:** Sign-in now uses the real login fields read from both sites, presses Enter if the button is not found, waits up to 12 s for the page to move on, and shows the site's own error text. Plan and delivery pages are still unverified.
+
+- P-7: HelloFresh and Chef's Plate sign-in profiles now use the fields read from the live login pages on 2026-11-14 (HelloFresh `input[name=username]`; Chef's Plate `#INPUT_EMAIL` and `#INPUT_PASSWORD`). Chef's Plate failed with "Could not find the sign-in form" because its email box is a plain text field.
+- After filling the form the connector presses the sign-in button, or Enter in the password box when the button cannot be matched (Chef's Plate buttons have no type). It then waits up to 12 seconds for the page to leave the login page before judging the result, which was the likely cause of HelloFresh's false "did not accept the login".
+- When the login page is still shown, the message includes the site's own error text if there is one.
+- Plan and delivery page paths and selectors are still unverified; Good Food is not probed yet. Accounts stay in dry-run. Android: versionCode 50001.
+
 ## v0.5.0 - 2026-11-13
 **Short:** Add Android app (TWA) APK for F-Droid repo
 **Long:** Adds the Android app (TWA, ca.hoffmanhouse.mealkit): twa-manifest, assetlinks.json route, android release job that signs and attaches the APK, rebuild input. Scan errors now redirect. APK untested until confirmed. Image 0.5.0.

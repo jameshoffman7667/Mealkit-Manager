@@ -41,7 +41,7 @@ On a phone, open **Promo codes > Scan a code with the camera**. The file picker 
 5. A cancel is refused if a payment problem is visible, or if a later box cannot be skipped.
 6. If a site asks for a code or CAPTCHA the app stops and marks the account **Needs attention**. It never gets around these. Sign in on the site yourself, then press Sync now.
 
-Important limits: the services have no public API, so the connectors drive their websites. The page paths and selectors in this release have **not been tested against the live sites** and will break when a site changes; fix them without a rebuild by putting overrides in `DATA_DIR/connectors.json`, for example `{"hellofresh": {"deliveries_path": "/my-account/deliveries", "card_sel": "[data-testid=card]"}}`. Automating an account may breach a service's terms. The image includes Chromium, so it is much larger than v0.2.
+Important limits: the services have no public API, so the connectors drive their websites. The sign-in forms of HelloFresh and Chef's Plate were read from the live login pages (v0.5.1); the other page paths and selectors have **not been tested against the live sites** and will break when a site changes; fix them without a rebuild by putting overrides in `DATA_DIR/connectors.json`, for example `{"hellofresh": {"deliveries_path": "/my-account/deliveries", "card_sel": "[data-testid=card]"}}`. Automating an account may breach a service's terms. The image includes Chromium, so it is much larger than v0.2.
 
 ## How planning works
 

@@ -74,6 +74,20 @@ def detect_verification(text: str) -> bool:
     return any(m in low for m in VERIFY_MARKERS)
 
 
+def still_on_login(url: str, has_password_box: bool) -> bool:
+    """True while the page is still the sign-in page: the address says login and a password box is shown."""
+    return "login" in (url or "").lower() and has_password_box
+
+
+def site_error_text(texts) -> str:
+    """The site's own sign-in error, from the text of its error elements: first non-empty, one line, short."""
+    for t in texts or []:
+        line = " ".join(str(t).split())
+        if line:
+            return line[:160]
+    return ""
+
+
 def detect_payment_issue(text: str) -> str:
     m = PAYMENT_RE.search(text)
     return m.group(0) if m else ""

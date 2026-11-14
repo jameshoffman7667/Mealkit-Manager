@@ -10,7 +10,7 @@ from typing import Optional
 from .. import config
 from .base import Connector, ConnectorError, NeedsVerification, RemoteState
 from .parse import (detect_payment_issue, detect_verification, monday, parse_account_status,
-                    parse_card)
+                    parse_card, site_error_text, still_on_login)
 from .profiles import SiteProfile
 
 KEEP_WORDS = re.compile(r"keep|stay|never mind|go back|not now|with (my|the|your) plan|offer|discount|% off", re.I)
@@ -96,17 +96,59 @@ class WebConnector(Connector):
         self._check("after-action")
 
     # ----- sign in -----
+    def _on_login(self) -> bool:
+        try:
+            return still_on_login(self.page.url, self.page.locator(self.p.password_sel).count() > 0)
+        except Exception:
+            return True          # the page is changing under us: treat as not finished yet
+
+    def _submit(self, password_box) -> None:
+        """Press the site's sign-in button; if it cannot be matched, press Enter in the password box."""
+        button = self.page.locator(self.p.submit_sel).first
+        try:
+            button.wait_for(state="visible", timeout=3000)
+            button.click()
+        except Exception:
+            password_box.press("Enter")
+
+    def _wait_after_login(self, seconds: float = 12.0) -> None:
+        """Give the site time to move on after the click (a check made at once can still see the login page)."""
+        waited = 0.0
+        while waited < seconds:
+            self.page.wait_for_timeout(500)
+            waited += 0.5
+            if not self._on_login() or (waited >= 3 and self._login_error()):
+                break
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
+
+    def _login_error(self) -> str:
+        try:
+            return site_error_text(self.page.locator(self.p.error_sel).all_inner_texts())
+        except Exception:
+            return ""
+
     def _login(self) -> None:
         self._goto(self.p.login_path, "login")
         try:
-            self.page.locator(self.p.email_sel).first.fill(self._email)
-            self.page.locator(self.p.password_sel).first.fill(self._password)
+            email_box = self.page.locator(self.p.email_sel).first
+            password_box = self.page.locator(self.p.password_sel).first
+            email_box.wait_for(state="visible", timeout=8000)
+            email_box.fill(self._email)
+            password_box.fill(self._password)
         except Exception:
             raise ConnectorError(f"Could not find the sign-in form at {self.p.base_url}{self.p.login_path}.")
-        self._click(self.page.locator(self.p.submit_sel), "sign in")
+        self._submit(password_box)
+        self._wait_after_login()
         self._check("after-login")
-        if self.page.locator(self.p.password_sel).count() and "login" in self.page.url.lower():
-            raise ConnectorError("The service did not accept the login. Check the email and password.")
+        if self._on_login():
+            said = self._login_error()
+            if said:
+                raise ConnectorError(f"The service did not accept the login: \"{said}\". Check the email and password.")
+            raise ConnectorError("The service did not accept the login, or the page did not move on after "
+                                 "signing in. Check the email and password.")
 
     # ----- reading -----
     def read_state(self, today: date) -> RemoteState:
